@@ -9,8 +9,6 @@ import pl.allegro.tech.hermes.frontend.cache.topic.TopicsCache;
 import pl.allegro.tech.hermes.frontend.metric.CachedTopic;
 import pl.allegro.tech.hermes.frontend.producer.BrokerMessageProducer;
 
-import javax.inject.Inject;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -36,7 +34,6 @@ public class TopicMetadataLoadingRunner {
 
     private final int threadPoolSize;
 
-    @Inject
     public TopicMetadataLoadingRunner(BrokerMessageProducer brokerMessageProducer,
                                       TopicsCache topicsCache,
                                       ConfigFactory config) {
@@ -59,7 +56,7 @@ public class TopicMetadataLoadingRunner {
         this.threadPoolSize = threadPoolSize;
     }
 
-    public List<MetadataLoadingResult> refreshMetadata() {
+    public List<MetadataLoadingResult> refreshMetadata() throws Exception {
         long start = System.currentTimeMillis();
         logger.info("Loading topics metadata");
         List<CachedTopic> topics = topicsCache.getTopics();
@@ -68,12 +65,9 @@ public class TopicMetadataLoadingRunner {
         return allResults;
     }
 
-    private List<MetadataLoadingResult> loadMetadataForTopics(List<CachedTopic> topics) {
+    private List<MetadataLoadingResult> loadMetadataForTopics(List<CachedTopic> topics) throws Exception {
         try (TopicMetadataLoader loader = new TopicMetadataLoader(brokerMessageProducer, retryCount, retryInterval, threadPoolSize)) {
             return allComplete(topics.stream().map(loader::loadTopicMetadata).collect(toList())).join();
-        } catch (Exception e) {
-            logger.error("An error occurred while loading topic metadata", e);
-            return Collections.emptyList();
         }
     }
 

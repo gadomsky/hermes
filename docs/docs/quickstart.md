@@ -8,7 +8,7 @@ There are two ways of setting up the environment: using vagrant or docker.
 
 ### Vagrant
 
-#### Prerequisities
+#### Prerequisites
 
 In order to go through this tutorial you need to have:
 
@@ -19,7 +19,7 @@ In order to go through this tutorial you need to have:
 
 #### Setup
 
-As described in [architecture](/overview/architecture) section, Hermes consists of multiple modules and requires Kafka
+As described in [architecture](overview/architecture.md) section, Hermes consists of multiple modules and requires Kafka
 and Zookeeper to run. To make this easy, we prepared a Vagrant file.
 
 ```bash
@@ -41,7 +41,7 @@ If the system is running, you should see Hermes Console when visiting Vagrant pu
 
 ### Docker
 
-#### Prerequisities
+#### Prerequisites
 
 If you want to run hermes with docker, you need to have:
 
@@ -77,6 +77,24 @@ If you want to run a specific hermes release simply add a given version to the i
 ```yaml
 image: allegro/hermes-management:hermes-[specific version tag]
 ```
+
+## Development
+
+File docker/docker-compose.development.yml disables deployment of hermes frontend, management, and consumers.
+
+We have to provide an environment (Kafka, ZooKeeper, Graphite, Schema Registry) with command executed in the project directory:
+
+`docker-compose -f docker/docker-compose.yml -f docker/docker-compose.development.yml up`
+
+To start hermes frontend, management and consumers we can use the following commands
+
+`./gradlew -p hermes-frontend run`
+
+`./gradlew -p hermes-management run`
+
+`./gradlew -p hermes-consumers run`
+
+or use `Run/Debug Configurations` in IntelliJ
 
 ## Creating group and topic
 

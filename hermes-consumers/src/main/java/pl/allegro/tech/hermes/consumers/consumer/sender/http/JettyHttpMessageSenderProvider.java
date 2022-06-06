@@ -22,10 +22,9 @@ import pl.allegro.tech.hermes.consumers.consumer.sender.resolver.EndpointAddress
 import pl.allegro.tech.hermes.consumers.consumer.sender.resolver.ResolvableEndpointAddress;
 import pl.allegro.tech.hermes.consumers.consumer.trace.MetadataAppender;
 
-import javax.inject.Inject;
-import javax.inject.Named;
 import java.util.Collection;
 import java.util.Optional;
+import java.util.Set;
 
 public class JettyHttpMessageSenderProvider implements ProtocolMessageSenderProvider {
 
@@ -40,21 +39,29 @@ public class JettyHttpMessageSenderProvider implements ProtocolMessageSenderProv
     private final MetadataAppender<Request> metadataAppender;
     private final HttpAuthorizationProviderFactory authorizationProviderFactory;
     private final HttpHeadersProvidersFactory httpHeadersProviderFactory;
+    private final SendingResultHandlers sendingResultHandlers;
+    private final HttpRequestFactoryProvider requestFactoryProvider;
+    private final Set<String> supportedProtocols;
 
-    @Inject
     public JettyHttpMessageSenderProvider(
-            @Named("http-1-client") HttpClient httpClient,
+            HttpClient httpClient,
             Http2ClientHolder http2ClientHolder,
             EndpointAddressResolver endpointAddressResolver,
             MetadataAppender<Request> metadataAppender,
             HttpAuthorizationProviderFactory authorizationProviderFactory,
-            HttpHeadersProvidersFactory httpHeadersProviderFactory) {
+            HttpHeadersProvidersFactory httpHeadersProviderFactory,
+            SendingResultHandlers sendingResultHandlers,
+            HttpRequestFactoryProvider requestFactoryProvider,
+            Set<String> supportedProtocols) {
         this.httpClient = httpClient;
         this.http2ClientHolder = http2ClientHolder;
         this.endpointAddressResolver = endpointAddressResolver;
         this.metadataAppender = metadataAppender;
         this.authorizationProviderFactory = authorizationProviderFactory;
         this.httpHeadersProviderFactory = httpHeadersProviderFactory;
+        this.sendingResultHandlers = sendingResultHandlers;
+        this.requestFactoryProvider = requestFactoryProvider;
+        this.supportedProtocols = supportedProtocols;
     }
 
     @Override
@@ -63,25 +70,18 @@ public class JettyHttpMessageSenderProvider implements ProtocolMessageSenderProv
         EndpointAddressResolverMetadata endpointAddressResolverMetadata = subscription.getEndpointAddressResolverMetadata();
         ResolvableEndpointAddress resolvableEndpoint = new ResolvableEndpointAddress(endpoint,
                 endpointAddressResolver, endpointAddressResolverMetadata);
-        HttpRequestFactory requestFactory = httpRequestFactory(subscription);
+        HttpRequestFactory requestFactory = requestFactoryProvider.provideRequestFactory(subscription, getHttpClient(subscription), metadataAppender);
 
         if (subscription.getMode() == SubscriptionMode.BROADCAST) {
-            return new JettyBroadCastMessageSender(requestFactory, resolvableEndpoint, getHttpRequestHeadersProvider(subscription));
+            return new JettyBroadCastMessageSender(requestFactory, resolvableEndpoint, getHttpRequestHeadersProvider(subscription), sendingResultHandlers);
         } else {
-            return new JettyMessageSender(requestFactory, resolvableEndpoint, getHttpRequestHeadersProvider(subscription));
+            return new JettyMessageSender(requestFactory, resolvableEndpoint, getHttpRequestHeadersProvider(subscription), sendingResultHandlers);
         }
     }
 
-    private HttpRequestFactory httpRequestFactory(Subscription subscription) {
-        int requestTimeout = subscription.getSerialSubscriptionPolicy().getRequestTimeout();
-        int socketTimeout = subscription.getSerialSubscriptionPolicy().getSocketTimeout();
-
-        return new HttpRequestFactory(
-                getHttpClient(subscription),
-                requestTimeout,
-                socketTimeout,
-                metadataAppender
-        );
+    @Override
+    public Set<String> getSupportedProtocols() {
+        return supportedProtocols;
     }
 
     private HttpHeadersProvider getHttpRequestHeadersProvider(Subscription subscription) {

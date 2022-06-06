@@ -1,7 +1,7 @@
 package pl.allegro.tech.hermes.management.api;
 
-import com.wordnik.swagger.annotations.Api;
-import com.wordnik.swagger.annotations.ApiOperation;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import pl.allegro.tech.hermes.api.MessageTextPreview;
@@ -13,8 +13,10 @@ import pl.allegro.tech.hermes.api.TopicMetrics;
 import pl.allegro.tech.hermes.api.TopicName;
 import pl.allegro.tech.hermes.api.TopicWithSchema;
 import pl.allegro.tech.hermes.common.exception.BrokerNotFoundForPartitionException;
+import pl.allegro.tech.hermes.management.api.auth.HermesSecurityAwareRequestUser;
 import pl.allegro.tech.hermes.management.api.auth.ManagementRights;
 import pl.allegro.tech.hermes.management.api.auth.Roles;
+import pl.allegro.tech.hermes.management.domain.auth.RequestUser;
 import pl.allegro.tech.hermes.management.domain.owner.OwnerSource;
 import pl.allegro.tech.hermes.management.domain.owner.OwnerSourceNotFound;
 import pl.allegro.tech.hermes.management.domain.owner.OwnerSources;
@@ -38,7 +40,6 @@ import javax.ws.rs.QueryParam;
 import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.Response;
-import javax.ws.rs.core.SecurityContext;
 import java.util.List;
 import java.util.Optional;
 
@@ -96,9 +97,9 @@ public class TopicsEndpoint {
     @RolesAllowed(Roles.ANY)
     @ApiOperation(value = "Create topic", httpMethod = HttpMethod.POST)
     public Response create(TopicWithSchema topicWithSchema, @Context ContainerRequestContext requestContext) {
-        String createdBy = requestContext.getSecurityContext().getUserPrincipal().getName();
+        RequestUser requestUser = new HermesSecurityAwareRequestUser(requestContext);
         CreatorRights isAllowedToManage = checkedTopic -> managementRights.isUserAllowedToManageTopic(checkedTopic, requestContext);
-        topicService.createTopicWithSchema(topicWithSchema, createdBy, isAllowedToManage);
+        topicService.createTopicWithSchema(topicWithSchema, requestUser, isAllowedToManage);
         return status(Response.Status.CREATED).build();
     }
 
@@ -107,9 +108,10 @@ public class TopicsEndpoint {
     @Path("/{topicName}")
     @RolesAllowed({Roles.ADMIN, Roles.TOPIC_OWNER})
     @ApiOperation(value = "Remove topic", httpMethod = HttpMethod.DELETE)
-    public Response remove(@PathParam("topicName") String qualifiedTopicName, @Context SecurityContext securityContext) {
+    public Response remove(@PathParam("topicName") String qualifiedTopicName, @Context ContainerRequestContext requestContext) {
+        RequestUser requestUser = new HermesSecurityAwareRequestUser(requestContext);
         topicService.removeTopicWithSchema(topicService.getTopicDetails(TopicName.fromQualifiedName(qualifiedTopicName)),
-                securityContext.getUserPrincipal().getName());
+                requestUser);
         return status(Response.Status.OK).build();
     }
 
@@ -120,9 +122,9 @@ public class TopicsEndpoint {
     @RolesAllowed({Roles.ADMIN, Roles.TOPIC_OWNER})
     @ApiOperation(value = "Update topic", httpMethod = HttpMethod.PUT)
     public Response update(@PathParam("topicName") String qualifiedTopicName, PatchData patch,
-                           @Context SecurityContext securityContext) {
-        String updatedBy = securityContext.getUserPrincipal().getName();
-        topicService.updateTopicWithSchema(TopicName.fromQualifiedName(qualifiedTopicName), patch, updatedBy);
+                           @Context ContainerRequestContext requestContext) {
+        RequestUser requestUser = new HermesSecurityAwareRequestUser(requestContext);
+        topicService.updateTopicWithSchema(TopicName.fromQualifiedName(qualifiedTopicName), patch, requestUser);
         return status(Response.Status.OK).build();
     }
 

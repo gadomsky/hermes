@@ -1,9 +1,13 @@
 var groups = angular.module('hermes.groups', ['hermes.topic', 'hermes.discovery', 'ui.bootstrap']);
 
-groups.controller('GroupsController', ['GroupRepository', '$scope', '$uibModal',
-    function (groupRepository, $scope, $modal) {
+groups.controller('GroupsController', ['GROUP_CONFIG', 'GroupRepository', '$scope', '$rootScope', '$uibModal',
+    function (groupConfig, groupRepository, $scope, $rootScope, $modal) {
         $scope.fetching = true;
         $scope.search = groupRepository.getSearchFilter();
+
+        $scope.canCreateGroup = function() {
+            return $rootScope.admin || groupConfig.nonAdminCreationEnabled;
+        };
 
         function loadGroups() {
             groupRepository.list().then(function (groups) {
@@ -19,6 +23,7 @@ groups.controller('GroupsController', ['GroupRepository', '$scope', '$uibModal',
                 templateUrl: 'partials/modal/editGroup.html',
                 controller: 'GroupEditController',
                 size: 'lg',
+                backdrop: 'static',
                 resolve: {
                     group: function() {
                         return {};
@@ -41,7 +46,6 @@ groups.controller('GroupController', ['GroupRepository', 'TopicFactory', '$scope
     function (groupRepository, topicFactory, $scope, $location, $stateParams, $modal, toaster, confirmationModal, passwordService) {
         $scope.fetching = true;
         var groupName = $scope.groupName = $stateParams.groupName;
-        var topicDraft = topicFactory.create();
 
         $scope.group = groupRepository.get(groupName);
         $scope.topics = [];
@@ -61,6 +65,7 @@ groups.controller('GroupController', ['GroupRepository', 'TopicFactory', '$scope
                 templateUrl: 'partials/modal/editTopic.html',
                 controller: 'TopicEditController',
                 size: 'lg',
+                backdrop: 'static',
                 resolve: {
                     operation: function () {
                         return 'ADD';
@@ -69,7 +74,7 @@ groups.controller('GroupController', ['GroupRepository', 'TopicFactory', '$scope
                         return groupName;
                     },
                     topic: function () {
-                        return topicDraft;
+                        return topicFactory.create();
                     },
                     messageSchema: function() {
                         return null;
@@ -77,7 +82,6 @@ groups.controller('GroupController', ['GroupRepository', 'TopicFactory', '$scope
                 }
             }).result.then(function(){
                 loadTopics();
-                topicDraft = topicFactory.create();
             });
 
 
@@ -88,6 +92,7 @@ groups.controller('GroupController', ['GroupRepository', 'TopicFactory', '$scope
                 templateUrl: 'partials/modal/editGroup.html',
                 controller: 'GroupEditController',
                 size: 'lg',
+                backdrop: 'static',
                 resolve: {
                     group: function() {
                         return $scope.group;
@@ -136,6 +141,7 @@ groups.controller('GroupEditController', ['GroupRepository', '$scope', '$uibModa
         $scope.operation = operation;
 
         $scope.save = function () {
+            $scope.disableSaveButton = true;
             passwordService.setRoot($scope.rootPassword);
             var response = operation === 'ADD'? groupRepository.add($scope.group) : groupRepository.save($scope.group);
             response.$promise
@@ -148,6 +154,7 @@ groups.controller('GroupEditController', ['GroupRepository', '$scope', '$uibModa
                 })
                 .finally(function () {
                     passwordService.reset();
+                    $scope.disableSaveButton = false;
                 });
         };
     }]);

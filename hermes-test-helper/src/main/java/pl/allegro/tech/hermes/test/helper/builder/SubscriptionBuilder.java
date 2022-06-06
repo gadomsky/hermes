@@ -2,6 +2,7 @@ package pl.allegro.tech.hermes.test.helper.builder;
 
 import pl.allegro.tech.hermes.api.*;
 
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -30,8 +31,6 @@ public class SubscriptionBuilder {
     private boolean http2Enabled = false;
 
     private OwnerId owner = new OwnerId("Plaintext", "some team");
-
-    private String supportTeam = "team";
 
     private MonitoringDetails monitoringDetails = MonitoringDetails.EMPTY;
 
@@ -83,6 +82,10 @@ public class SubscriptionBuilder {
         return subscription(TopicName.fromQualifiedName(topicQualifiedName), subscriptionName, EndpointAddress.of(endpoint));
     }
 
+    public static SubscriptionBuilder subscription(String topicQualifiedName, String subscriptionName, URI endpoint) {
+        return subscription(TopicName.fromQualifiedName(topicQualifiedName), subscriptionName, EndpointAddress.of(endpoint));
+    }
+
     public static SubscriptionBuilder subscription(String topicQualifiedName, String subscriptionName, EndpointAddress endpoint) {
         return subscription(TopicName.fromQualifiedName(topicQualifiedName), subscriptionName, endpoint);
     }
@@ -92,14 +95,14 @@ public class SubscriptionBuilder {
             return Subscription.createSerialSubscription(
                     topicName, name, endpoint, state, description,
                     serialSubscriptionPolicy, trackingEnabled,
-                    trackingMode, owner, supportTeam, monitoringDetails, contentType,
+                    trackingMode, owner, monitoringDetails, contentType,
                     filters, mode, headers, metadata, oAuthPolicy, http2Enabled, attachingIdentityHeadersEnabled
             );
         } else {
             return Subscription.createBatchSubscription(
                     topicName, name, endpoint, state, description,
                     batchSubscriptionPolicy, trackingEnabled,
-                    trackingMode, owner, supportTeam, monitoringDetails, contentType,
+                    trackingMode, owner, monitoringDetails, contentType,
                     filters, headers, metadata, oAuthPolicy, http2Enabled, attachingIdentityHeadersEnabled
             );
         }
@@ -112,6 +115,11 @@ public class SubscriptionBuilder {
 
     public SubscriptionBuilder withEndpoint(String endpoint) {
         this.endpoint = EndpointAddress.of(endpoint);
+        return this;
+    }
+
+    public SubscriptionBuilder withEndpoint(URI endpoint) {
+        this.endpoint = EndpointAddress.of(endpoint.toString());
         return this;
     }
 
@@ -158,12 +166,6 @@ public class SubscriptionBuilder {
 
     public SubscriptionBuilder withOwner(OwnerId owner) {
         this.owner = owner;
-        return this;
-    }
-
-    @Deprecated
-    public SubscriptionBuilder withSupportTeam(String supportTeam) {
-        this.supportTeam = supportTeam;
         return this;
     }
 

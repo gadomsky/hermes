@@ -20,6 +20,7 @@ import pl.allegro.tech.hermes.consumers.consumer.sender.http.headers.Http1Header
 import pl.allegro.tech.hermes.consumers.consumer.sender.http.headers.HttpHeadersProvider;
 import pl.allegro.tech.hermes.consumers.consumer.sender.resolver.ResolvableEndpointAddress;
 import pl.allegro.tech.hermes.consumers.consumer.sender.resolver.SimpleEndpointAddressResolver;
+import pl.allegro.tech.hermes.consumers.config.ConsumerConfiguration;
 import pl.allegro.tech.hermes.consumers.test.MessageBuilder;
 import pl.allegro.tech.hermes.metrics.PathsCompiler;
 import pl.allegro.tech.hermes.test.helper.config.MutableConfigFactory;
@@ -53,7 +54,7 @@ public class JettyMessageSenderTest {
     private RemoteServiceEndpoint remoteServiceEndpoint;
     private JettyMessageSender messageSender;
 
-    private HttpHeadersProvider headersProvider = new HermesHeadersProvider(Collections.singleton(new Http1HeadersProvider()));
+    private final HttpHeadersProvider headersProvider = new HermesHeadersProvider(Collections.singleton(new Http1HeadersProvider()));
 
     @BeforeClass
     public static void setupEnvironment() throws Exception {
@@ -61,15 +62,14 @@ public class JettyMessageSenderTest {
         wireMockServer.start();
 
         ConfigFactory configFactory = new MutableConfigFactory();
-        SslContextFactoryProvider sslContextFactoryProvider = new SslContextFactoryProvider();
-        sslContextFactoryProvider.configFactory = configFactory;
-
-        HttpClientFactory httpClientFactory = new HttpClientFactory(new HttpClientsFactory(
-                configFactory,
-                new InstrumentedExecutorServiceFactory(new HermesMetrics(new MetricRegistry(), new PathsCompiler("localhost"))),
-                sslContextFactoryProvider));
-
-        client = httpClientFactory.provide();
+        SslContextFactoryProvider sslContextFactoryProvider = new SslContextFactoryProvider(null, configFactory);
+        ConsumerConfiguration consumerConfiguration = new ConsumerConfiguration();
+        client = consumerConfiguration.http1Client(
+                new HttpClientsFactory(
+                        configFactory,
+                        new InstrumentedExecutorServiceFactory(new HermesMetrics(new MetricRegistry(), new PathsCompiler("localhost"))),
+                        sslContextFactoryProvider)
+        );
         client.start();
     }
 
@@ -83,8 +83,8 @@ public class JettyMessageSenderTest {
     public void setUp() throws Exception {
         remoteServiceEndpoint = new RemoteServiceEndpoint(wireMockServer);
         address = new ResolvableEndpointAddress(ENDPOINT, new SimpleEndpointAddressResolver(), METADATA);
-        HttpRequestFactory httpRequestFactory = new HttpRequestFactory(client, 1000, 1000, new DefaultHttpMetadataAppender());
-        messageSender = new JettyMessageSender(httpRequestFactory, address, headersProvider);
+        HttpRequestFactory httpRequestFactory = new DefaultHttpRequestFactory(client, 1000, 1000, new DefaultHttpMetadataAppender());
+        messageSender = new JettyMessageSender(httpRequestFactory, address, headersProvider, new DefaultSendingResultHandlers());
     }
 
     @Test
@@ -185,14 +185,14 @@ public class JettyMessageSenderTest {
     @Test
     public void shouldSendAuthorizationHeaderIfAuthorizationProviderAttached() {
         // given
-        HttpRequestFactory httpRequestFactory = new HttpRequestFactory(client, 1000, 1000, new DefaultHttpMetadataAppender());
+        HttpRequestFactory httpRequestFactory = new DefaultHttpRequestFactory(client, 1000, 1000, new DefaultHttpMetadataAppender());
 
         JettyMessageSender messageSender = new JettyMessageSender(httpRequestFactory, address, new HermesHeadersProvider(Collections.singleton(
                 new AuthHeadersProvider(
                         new Http1HeadersProvider(),
                         () -> Optional.of("Basic Auth Hello!")
                 ))
-        ));
+        ), new DefaultSendingResultHandlers());
         Message message = MessageBuilder.withTestMessage().build();
         remoteServiceEndpoint.expectMessages(TEST_MESSAGE_CONTENT);
 
@@ -207,12 +207,12 @@ public class JettyMessageSenderTest {
     @Test
     public void shouldUseSuppliedRequestTimeout() throws ExecutionException, InterruptedException, TimeoutException {
         // given
-        HttpRequestFactory httpRequestFactory = new HttpRequestFactory(client,
+        HttpRequestFactory httpRequestFactory = new DefaultHttpRequestFactory(client,
                 100, 1000,
                 new DefaultHttpMetadataAppender());
         remoteServiceEndpoint.setDelay(500);
 
-        JettyMessageSender messageSender = new JettyMessageSender(httpRequestFactory, address, headersProvider);
+        JettyMessageSender messageSender = new JettyMessageSender(httpRequestFactory, address, headersProvider, new DefaultSendingResultHandlers());
         Message message = MessageBuilder.withTestMessage().build();
         remoteServiceEndpoint.expectMessages(TEST_MESSAGE_CONTENT);
 
@@ -226,12 +226,12 @@ public class JettyMessageSenderTest {
     @Test
     public void shouldUseSuppliedSocketTimeout() throws ExecutionException, InterruptedException, TimeoutException {
         // given
-        HttpRequestFactory httpRequestFactory = new HttpRequestFactory(client,
+        HttpRequestFactory httpRequestFactory = new DefaultHttpRequestFactory(client,
                 1000, 100,
                 new DefaultHttpMetadataAppender());
         remoteServiceEndpoint.setDelay(200);
 
-        JettyMessageSender messageSender = new JettyMessageSender(httpRequestFactory, address, headersProvider);
+        JettyMessageSender messageSender = new JettyMessageSender(httpRequestFactory, address, headersProvider, new DefaultSendingResultHandlers());
         Message message = MessageBuilder.withTestMessage().build();
         remoteServiceEndpoint.expectMessages(TEST_MESSAGE_CONTENT);
 

@@ -3,8 +3,7 @@
 Hermes Frontend API has option to register callbacks triggered during different phases of message lifetime:
 
 * BrokerAcknowledgedListener: message has been acknowledged by broker, can be considered as persisted
-* BrokerTimeoutListener: broker did not save message in time, it is now stored in memory buffer and retried until
-    successfull
+* BrokerTimeoutListener: broker did not save message in time, it is now stored in memory buffer and retried until  successful
 * BrokerErrorListener: there was some kind of error (e.g. no connection to broker) when trying to send message to broker
 
 ## ChronicleMap implementation
@@ -35,10 +34,10 @@ read and sent to Kafka.
 
 ## Custom implementation
 
-To register callbacks use methods exposed in `HermesFrontend.Builder`:
+To register custom callbacks register the implementations as beans:
 
 ```java
-class BrokerListener implements BrokerAcknowledgedListener,
+class MyCustomBrokerListener implements BrokerAcknowledgedListener,
                                 BrokerTimeoutListener,
                                 BrokerErrorListener {
 
@@ -57,16 +56,23 @@ class BrokerListener implements BrokerAcknowledgedListener,
         /* ... */
     }
 }
+```
 
-class HermesStarter {
+```java
+@Configuration
+public class CustomHermesFrontendConfiguration {
 
-    public void start(BrokerListener listener) {
-        HermesFrontend frontend = HermesFrontend.frontend()
-            .withBrokerAcknowledgeListener(brokerListener)
-            .withBrokerTimeoutListener(brokerListener)
-            .withBrokerErrorListener(brokerListener)
-            .build();
-        frontend.start();
+    @Primary
+    @Bean
+    public BrokerListeners myBrokerListeners() {
+        BrokerListener customBrokerListener = new MyCustomBrokerListener();
+        BrokerListeners brokerListeners = new BrokerListeners();
+
+        brokerListeners.addAcknowledgeListener(customBrokerListener);
+        brokerListeners.addTimeoutListener(customBrokerListener);
+        brokerListeners.addErrorListener(customBrokerListener);
+
+        return brokerListeners;
     }
 }
 ```

@@ -23,6 +23,20 @@ with a given response code.
 - `avroTopic(String topicName, int statusCode)` - defines an Avro topic that when published on responds
 with a given response code.
 
+- `jsonTopic(String topicName, Response response)` - defines a JSON topic that when published on responds
+  with a given response.
+
+- `avroTopic(String topicName, Response response)` - defines an Avro topic that when published on responds
+  with a given response.
+- `avroTopic(String topicName, Response response, Schema schema, Class<T> clazz, Predicate<T> predicate)` - defines an 
+Avro topic with predicate to match request by field in schema
+- `jsonTopic(String topicName, Response response, Class<T> clazz, Predicate<T> predicate)` - defines a
+ Json topic with predicate to match request by field
+
+`Response` allows to define the following elements:
+- `statusCode` - a HTTP response code
+- `fixedDelay` - a response will be returned after the given time
+
 ##### HermesMockExpect
 
 Is responsible for expectation of message on Hermes side, provides the following methods:
@@ -73,7 +87,7 @@ as a specific type.
 To start using Hermes mock, add it as a dependency:
 
 ```groovy
-compile group: 'pl.allegro.tech.hermes', name: 'hermes-mock', version: versions.hermes
+testImplementation group: 'pl.allegro.tech.hermes', name: 'hermes-mock', version: versions.hermes
 ```
 
 ## Example
@@ -104,4 +118,39 @@ class MyServiceTest {
         // and verify that `all` contains what we're expecting 
     }
 }
+```
+
+## JUnit5 / Spock2 automatic startup issues
+
+If you're using JUnit5 or Spock2 `HermesMockRule` won't start automatically in your tests. In order to make it work you 
+can:
+
+- Start and stop Hermes mock manually using `HermesMock`:
+```java
+class Junit5Test {
+    
+    private HermesMock hermesMock = new HermesMock.Builder().withPort(8090).build();
+    
+    @BeforeAll
+    static void setup() {
+        hermesMock.start();
+    }
+
+    @AfterAll
+    static void cleanup() {
+        hermesMock.stop();
+    }
+    
+    @Test
+    public void exampleTest() {
+        // you can now use Hermes mock as in previous example
+    }
+}
+```
+
+- *(Only for Spock2)* add `spock-junit4` dependency which allows usage of JUnit4 annotations in Spock2, so you can use
+`HermesMockRule` as shown earlier.
+
+```groovy
+testImplementation group: 'org.spockframework', name: 'spock-junit4', version: versions.spock
 ```

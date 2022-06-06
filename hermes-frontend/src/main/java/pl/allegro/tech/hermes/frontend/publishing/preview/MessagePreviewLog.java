@@ -1,6 +1,7 @@
 package pl.allegro.tech.hermes.frontend.publishing.preview;
 
 import com.google.common.util.concurrent.AtomicLongMap;
+import pl.allegro.tech.hermes.api.Topic;
 import pl.allegro.tech.hermes.api.TopicName;
 import pl.allegro.tech.hermes.common.config.ConfigFactory;
 import pl.allegro.tech.hermes.common.config.Configs;
@@ -8,7 +9,6 @@ import pl.allegro.tech.hermes.domain.topic.preview.MessagePreview;
 import pl.allegro.tech.hermes.domain.topic.preview.TopicsMessagesPreview;
 import pl.allegro.tech.hermes.frontend.publishing.message.Message;
 
-import javax.inject.Inject;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -23,7 +23,6 @@ public class MessagePreviewLog {
 
     private final ConcurrentLinkedDeque<MessagePreviewSnapshot> messages = new ConcurrentLinkedDeque<>();
 
-    @Inject
     public MessagePreviewLog(MessagePreviewFactory messagePreviewFactory, ConfigFactory configFactory) {
         this(messagePreviewFactory, configFactory.getIntProperty(Configs.FRONTEND_MESSAGE_PREVIEW_SIZE));
     }
@@ -33,10 +32,10 @@ public class MessagePreviewLog {
         this.previewSizePerTopic = previewSizePerTopic;
     }
 
-    public void add(TopicName topicName, Message message) {
-        long counter = limiter.getAndIncrement(topicName);
+    public void add(Topic topic, Message message) {
+        long counter = limiter.getAndIncrement(topic.getName());
         if (counter < previewSizePerTopic) {
-            messages.add(new MessagePreviewSnapshot(topicName, messagePreviewFactory.create(message)));
+            messages.add(new MessagePreviewSnapshot(topic.getName(), messagePreviewFactory.create(message, topic.isSchemaIdAwareSerializationEnabled())));
         }
     }
 

@@ -5,6 +5,8 @@ import pl.allegro.tech.hermes.api.ContentType;
 import pl.allegro.tech.hermes.api.Group;
 import pl.allegro.tech.hermes.api.OAuthProvider;
 import pl.allegro.tech.hermes.api.PatchData;
+import pl.allegro.tech.hermes.api.RawSchema;
+import pl.allegro.tech.hermes.api.Readiness;
 import pl.allegro.tech.hermes.api.Subscription;
 import pl.allegro.tech.hermes.api.SubscriptionMode;
 import pl.allegro.tech.hermes.api.Topic;
@@ -14,6 +16,10 @@ import pl.allegro.tech.hermes.api.helpers.Patch;
 
 import javax.ws.rs.core.Response;
 
+import java.net.URI;
+import java.util.concurrent.TimeUnit;
+
+import static javax.ws.rs.core.Response.Status.ACCEPTED;
 import static javax.ws.rs.core.Response.Status.CREATED;
 import static javax.ws.rs.core.Response.Status.OK;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,21 +40,17 @@ public class HermesAPIOperations {
     }
 
     public void createGroup(String group) {
-        createGroup(group, "team");
-    }
-
-    public void createGroup(String group, String supportTeam) {
         if (endpoints.group().list().contains(group)) {
             return;
         }
-        assertThat(endpoints.group().create(new Group(group, supportTeam)).getStatus()).isEqualTo(CREATED.getStatusCode());
+        assertThat(endpoints.group().create(new Group(group)).getStatus()).isEqualTo(CREATED.getStatusCode());
 
         wait.untilGroupCreated(group);
     }
 
     public TopicWithSchema createTopic(String group, String topic) {
         Topic created = topic(group, topic)
-                .withRetentionTime(1000)
+                .withRetentionTime(7, TimeUnit.DAYS)
                 .withDescription("Test topic")
                 .build();
         return createTopic(created);
@@ -66,10 +68,14 @@ public class HermesAPIOperations {
         if (endpoints.findTopics(topicWithSchema, topicWithSchema.isTrackingEnabled()).contains(topicWithSchema.getQualifiedName())) {
             return topicWithSchema;
         }
-        assertThat(endpoints.topic().create(topicWithSchema).getStatus()).isEqualTo(CREATED.getStatusCode());
+        assertThat(createTopicResponse(topicWithSchema).getStatus()).isEqualTo(CREATED.getStatusCode());
 
         wait.untilTopicCreated(topicWithSchema);
         return topicWithSchema;
+    }
+
+    public Response createTopicResponse(TopicWithSchema topicWithSchema) {
+        return endpoints.topic().create(topicWithSchema);
     }
 
     public void saveSchema(Topic topic, String schema) {
@@ -77,6 +83,16 @@ public class HermesAPIOperations {
         assertThat(response.getStatus()).isEqualTo(CREATED.getStatusCode());
 
         wait.untilSchemaCreated(topic);
+    }
+
+    public Response getSchemaResponse(Topic topic) {
+        Response response = endpoints.schema().get(topic.getQualifiedName());
+        System.out.println(response.toString());
+        return response;
+    }
+
+    public Subscription createSubscription(Topic topic, String subscriptionName, URI endpoint) {
+        return createSubscription(topic, subscriptionName, endpoint.toString(), ContentType.JSON);
     }
 
     public Subscription createSubscription(Topic topic, String subscriptionName, String endpoint) {
@@ -87,8 +103,16 @@ public class HermesAPIOperations {
         return createSubscription(topic, subscriptionName, endpoint, ContentType.JSON, SubscriptionMode.ANYCAST, state);
     }
 
+    public Subscription createSubscription(Topic topic, String subscriptionName, URI endpoint, Subscription.State state) {
+        return createSubscription(topic, subscriptionName, endpoint.toString(), ContentType.JSON, SubscriptionMode.ANYCAST, state);
+    }
+
     public Subscription createSubscription(Topic topic, String subscriptionName, String endpoint, ContentType contentType) {
         return createSubscription(topic, subscriptionName, endpoint, contentType, SubscriptionMode.ANYCAST, Subscription.State.PENDING);
+    }
+
+    public Subscription createSubscription(Topic topic, String subscriptionName, URI endpoint, ContentType contentType) {
+        return createSubscription(topic, subscriptionName, endpoint.toString(), contentType, SubscriptionMode.ANYCAST, Subscription.State.PENDING);
     }
 
     public Subscription createBroadcastSubscription(Topic topic, String subscriptionName, String endpoint) {
@@ -193,6 +217,10 @@ public class HermesAPIOperations {
         createSubscription(topic, subscription);
     }
 
+    public void createBatchSubscription(Topic topic, URI endpoint, BatchSubscriptionPolicy policy) {
+        createBatchSubscription(topic, endpoint.toString(), policy);
+    }
+
     public void createOAuthProvider(OAuthProvider oAuthProvider) {
         if (endpoints.oAuthProvider().list().contains(oAuthProvider.getName())) {
             return;
@@ -202,4 +230,7 @@ public class HermesAPIOperations {
         wait.untilOAuthProviderCreated(oAuthProvider.getName());
     }
 
+    public void setReadiness(String dcName, boolean isReady) {
+        assertThat(endpoints.readiness().setReadiness(dcName, new Readiness(isReady)).getStatus()).isEqualTo(ACCEPTED.getStatusCode());
+    }
 }

@@ -1,11 +1,12 @@
 package pl.allegro.tech.hermes.management.api;
 
-import com.wordnik.swagger.annotations.ApiOperation;
-import org.hibernate.validator.constraints.NotEmpty;
+import io.swagger.annotations.ApiOperation;
 import org.springframework.beans.factory.annotation.Autowired;
 import pl.allegro.tech.hermes.api.ConsumerGroup;
 import pl.allegro.tech.hermes.api.MessageTrace;
+import pl.allegro.tech.hermes.api.OffsetRetransmissionDate;
 import pl.allegro.tech.hermes.api.PatchData;
+import pl.allegro.tech.hermes.api.PersistentSubscriptionMetrics;
 import pl.allegro.tech.hermes.api.Query;
 import pl.allegro.tech.hermes.api.SentMessageTrace;
 import pl.allegro.tech.hermes.api.Subscription;
@@ -13,15 +14,15 @@ import pl.allegro.tech.hermes.api.SubscriptionHealth;
 import pl.allegro.tech.hermes.api.SubscriptionMetrics;
 import pl.allegro.tech.hermes.api.Topic;
 import pl.allegro.tech.hermes.api.TopicName;
-import pl.allegro.tech.hermes.management.api.auth.ManagementRights;
+import pl.allegro.tech.hermes.management.api.auth.HermesSecurityAwareRequestUser;
 import pl.allegro.tech.hermes.management.api.auth.Roles;
 import pl.allegro.tech.hermes.management.domain.subscription.SubscriptionService;
 import pl.allegro.tech.hermes.management.domain.topic.TopicService;
 import pl.allegro.tech.hermes.management.infrastructure.kafka.MultiDCAwareService;
 import pl.allegro.tech.hermes.management.infrastructure.kafka.MultiDCOffsetChangeSummary;
-import pl.allegro.tech.hermes.management.infrastructure.time.TimeFormatter;
 
 import javax.annotation.security.RolesAllowed;
+import javax.validation.Valid;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.DefaultValue;
@@ -36,7 +37,6 @@ import javax.ws.rs.QueryParam;
 import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.Response;
-import javax.ws.rs.core.SecurityContext;
 import java.util.List;
 import java.util.Optional;
 
@@ -51,20 +51,14 @@ public class SubscriptionsEndpoint {
     private final SubscriptionService subscriptionService;
     private final TopicService topicService;
     private final MultiDCAwareService multiDCAwareService;
-    private final TimeFormatter timeFormatter;
-    private final ManagementRights managementRights;
 
     @Autowired
     public SubscriptionsEndpoint(SubscriptionService subscriptionService,
                                  TopicService topicService,
-                                 MultiDCAwareService multiDCAwareService,
-                                 TimeFormatter timeFormatter,
-                                 ManagementRights managementRights) {
+                                 MultiDCAwareService multiDCAwareService) {
         this.subscriptionService = subscriptionService;
         this.topicService = topicService;
         this.multiDCAwareService = multiDCAwareService;
-        this.timeFormatter = timeFormatter;
-        this.managementRights = managementRights;
     }
 
     @GET
@@ -97,8 +91,11 @@ public class SubscriptionsEndpoint {
     public Response create(@PathParam("topicName") String qualifiedTopicName,
                            Subscription subscription,
                            @Context ContainerRequestContext requestContext) {
-        subscriptionService.createSubscription(subscription, requestContext.getSecurityContext().getUserPrincipal().getName(),
-                managementRights.getSubscriptionCreatorRights(requestContext), qualifiedTopicName);
+        subscriptionService.createSubscription(
+                subscription,
+                new HermesSecurityAwareRequestUser(requestContext),
+                qualifiedTopicName
+        );
         return responseStatus(Response.Status.CREATED);
     }
 
@@ -156,6 +153,15 @@ public class SubscriptionsEndpoint {
 
     @GET
     @Produces(APPLICATION_JSON)
+    @Path("/{subscriptionName}/metrics/persistent")
+    @ApiOperation(value = "Get persistent subscription metrics", response = PersistentSubscriptionMetrics.class, httpMethod = HttpMethod.GET)
+    public PersistentSubscriptionMetrics getPersistentMetrics(@PathParam("topicName") String qualifiedTopicName,
+                                                              @PathParam("subscriptionName") String subscriptionName) {
+        return subscriptionService.getPersistentSubscriptionMetrics(fromQualifiedName(qualifiedTopicName), subscriptionName);
+    }
+
+    @GET
+    @Produces(APPLICATION_JSON)
     @Path("/{subscriptionName}/health")
     @ApiOperation(value = "Get subscription health", response = SubscriptionHealth.class, httpMethod = HttpMethod.GET)
     public SubscriptionHealth getHealth(@PathParam("topicName") String qualifiedTopicName,
@@ -171,9 +177,13 @@ public class SubscriptionsEndpoint {
     public Response updateState(@PathParam("topicName") String qualifiedTopicName,
                                 @PathParam("subscriptionName") String subscriptionName,
                                 Subscription.State state,
-                                @Context SecurityContext securityContext) {
-        subscriptionService.updateSubscriptionState(fromQualifiedName(qualifiedTopicName),
-                subscriptionName, state, securityContext.getUserPrincipal().getName());
+                                @Context ContainerRequestContext requestContext) {
+        subscriptionService.updateSubscriptionState(
+                fromQualifiedName(qualifiedTopicName),
+                subscriptionName,
+                state,
+                new HermesSecurityAwareRequestUser(requestContext)
+        );
         return responseStatus(OK);
     }
 
@@ -183,9 +193,12 @@ public class SubscriptionsEndpoint {
     @ApiOperation(value = "Remove subscription", httpMethod = HttpMethod.DELETE)
     public Response remove(@PathParam("topicName") String qualifiedTopicName,
                            @PathParam("subscriptionName") String subscriptionId,
-                           @Context SecurityContext securityContext) {
-        subscriptionService.removeSubscription(fromQualifiedName(qualifiedTopicName),
-                subscriptionId, securityContext.getUserPrincipal().getName());
+                           @Context ContainerRequestContext requestContext) {
+        subscriptionService.removeSubscription(
+                fromQualifiedName(qualifiedTopicName),
+                subscriptionId,
+                new HermesSecurityAwareRequestUser(requestContext)
+        );
         return responseStatus(OK);
     }
 
@@ -197,9 +210,13 @@ public class SubscriptionsEndpoint {
     public Response update(@PathParam("topicName") String qualifiedTopicName,
                            @PathParam("subscriptionName") String subscriptionName,
                            PatchData patch,
-                           @Context SecurityContext securityContext) {
-        subscriptionService.updateSubscription(TopicName.fromQualifiedName(qualifiedTopicName),
-                subscriptionName, patch, securityContext.getUserPrincipal().getName());
+                           @Context ContainerRequestContext requestContext) {
+        subscriptionService.updateSubscription(
+                TopicName.fromQualifiedName(qualifiedTopicName),
+                subscriptionName,
+                patch,
+                new HermesSecurityAwareRequestUser(requestContext)
+        );
         return responseStatus(OK);
     }
 
@@ -212,13 +229,16 @@ public class SubscriptionsEndpoint {
     public Response retransmit(@PathParam("topicName") String qualifiedTopicName,
                                @PathParam("subscriptionName") String subscriptionName,
                                @DefaultValue("false") @QueryParam("dryRun") boolean dryRun,
-                               @NotEmpty String formattedTime) {
+                               @Valid OffsetRetransmissionDate offsetRetransmissionDate,
+                               @Context ContainerRequestContext requestContext) {
 
         MultiDCOffsetChangeSummary summary = multiDCAwareService.moveOffset(
                 topicService.getTopicDetails(TopicName.fromQualifiedName(qualifiedTopicName)),
                 subscriptionName,
-                timeFormatter.parse(formattedTime),
-                dryRun);
+                offsetRetransmissionDate.getRetransmissionDate().toInstant().toEpochMilli(),
+                dryRun,
+                new HermesSecurityAwareRequestUser(requestContext)
+        );
 
         return Response.status(OK).entity(summary).build();
     }

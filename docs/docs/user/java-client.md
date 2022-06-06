@@ -14,7 +14,7 @@ A thin library designed to publish messages to Hermes.
 Core functionality is provided by `HermesClient` class, which in turn uses `HermesSender` to do the heavy lifting.
 At the moment there are three implementations of `HermesSender`:
 
-* **RestTemplateHermesSender** - recommended for services built on [Spring framework](http://projects.spring.io/spring-framework);
+* **RestTemplateHermesSender** - recommended for services built on [Spring framework](https://spring.io/projects/spring-framework);
   uses [AsyncRestTemplate](http://docs.spring.io/spring/docs/current/javadoc-api/org/springframework/web/client/AsyncRestTemplate.html)
   for asynchronous transmission
 * **JerseyHermesSender** - recommended for services using  [Jersey](<https://jersey.java.net/>)
@@ -192,7 +192,7 @@ HermesClient client = HermesClientBuilder.hermesClient(new OkHttpHermesSender(ok
 
 ### Custom HermesSender
 
-Example with [Unirest](http://unirest.io/java.html) - very simple http client.
+Example with [Unirest](http://kong.github.io/unirest-java) - very simple http client.
 
 ```java
 HermesClient client = HermesClientBuilder.hermesClient((uri, message) -> {

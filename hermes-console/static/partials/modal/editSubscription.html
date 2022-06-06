@@ -12,7 +12,7 @@
                 </div>
             </div>
 
-            <div class="form-group {{subscriptionForm.subscriptionName.$valid ? '' : 'has-error'}} " ng-show="operation === 'ADD'">
+            <div class="form-group {{subscriptionForm.subscriptionName.$valid ? '' : 'has-error'}} " ng-if="operation === 'ADD'">
                 <label for="subscriptionName" class="col-md-3 control-label">Name</label>
                 <div class="col-md-9" ng-if="operation === 'ADD'">
                     <input class="form-control" id="subscriptionName" name="subscriptionName" ng-required="operation === 'ADD'" placeholder="name of subscription" ng-model="subscription.name" ng-pattern="/^[a-zA-Z0-9.-]+$/"/>
@@ -109,12 +109,23 @@
                 </div>
             </div>
 
-            <div class="form-group {{subscriptionForm.subscriptionRequestTimeout.$valid ? '' : 'has-error'}}" ng-show="subscription.deliveryType === 'BATCH'">
+            <div class="form-group {{subscriptionForm.subscriptionRequestTimeout.$valid ? '' : 'has-error'}}">
                 <label for="subscriptionRequestTimeout" class="col-md-3 control-label">Request timeout</label>
                 <div class="col-md-9">
                     <div class="input-group">
-                        <input type="number" min="0" max="1000000" step="1" ng-required="subscription.deliveryType === 'BATCH'" class="form-control" id="subscriptionRequestTimeout" name="subscriptionRequestTimeout" placeholder="Max time for processing message by subscriber." ng-model="subscription.subscriptionPolicy.requestTimeout"/>
+                        <input type="number" min="0" max="{{subscription.deliveryType === 'SERIAL' ? 10000 : 1000000}}"
+                               step="1" ng-required="subscription.deliveryType === 'BATCH'" class="form-control"
+                               id="subscriptionRequestTimeout" name="subscriptionRequestTimeout"
+                               placeholder="Max time for processing message by the subscriber"
+                               ng-model="subscription.subscriptionPolicy.requestTimeout"/>
                         <span class="input-group-addon">milliseconds</span>
+                        <span class="input-group-addon helpme-addon" uib-tooltip="Max time for processing message by the subscriber. The value is used in Hermes http client.">?</span>
+                    </div>
+                    <div class="alert alert-warning"
+                         ng-show="subscription.subscriptionPolicy.requestTimeout >= config.requestTimeoutWarningThreshold && subscription.deliveryType === 'SERIAL'">
+                        <strong>High request timeout <span class="glyphicon glyphicon-alert" /></strong>
+                        Please consider lower value to comply with the fail-fast principle.
+                        In some cases it is better to rethink the design of a subscriber rather than increase the timeout.
                     </div>
                 </div>
             </div>
@@ -191,6 +202,12 @@
                             <option value="trackingAll">Track everything</option>
                         </select>
                     </div>
+                    <div class="alert alert-warning"
+                         ng-show="subscription.trackingMode === 'trackingAll'">
+                        <strong>Tracking all messages enabled <span class="glyphicon glyphicon-alert" /></strong>
+                        Please chose this option only when necessary. Mainly this is for debugging problems with subscription.
+                        Remember to disable this mode after the problem is solved.
+                    </div>
                 </div>
             </div>
 
@@ -203,6 +220,15 @@
                                     filters="subscription.filters"
                                     with-debugger="true"
                                     topic-name="topicName"></filters-editor>
+                </div>
+            </div>
+
+            <div class="form-group" ng-show="showHeadersFilter">
+                <label class="col-md-3 control-label">HTTP header filter</label>
+                <div class="col-md-9">
+                    <http-header-filters-editor
+                        form="subscriptionForm"
+                        filters="subscription.filters"></http-header-filters-editor>
                 </div>
             </div>
 
@@ -315,7 +341,7 @@
         </form>
     </div>
     <div class="modal-footer">
-        <button class="btn btn-primary" ng-disabled="subscriptionForm.$invalid" ng-click="save()">Save</button>
+        <button class="btn btn-primary" ng-disabled="subscriptionForm.$invalid || disableSaveButton" ng-click="save()">Save</button>
         <button class="btn btn-warning" ng-click="$dismiss()">Cancel</button>
     </div>
 </section>

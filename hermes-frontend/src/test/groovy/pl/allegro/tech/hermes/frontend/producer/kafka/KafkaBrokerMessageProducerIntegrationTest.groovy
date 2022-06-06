@@ -53,7 +53,6 @@ class KafkaBrokerMessageProducerIntegrationTest extends Specification {
 
     @Shared
     ConfigFactory configFactory = Mock() {
-        getLongProperty(Configs.FRONTEND_STARTUP_WAIT_KAFKA_INTERVAL) >> 1L
         getStringProperty(Configs.KAFKA_HEADER_NAME_MESSAGE_ID) >> "id"
         getStringProperty(Configs.KAFKA_HEADER_NAME_TIMESTAMP) >> "ts"
         getStringProperty(Configs.KAFKA_HEADER_NAME_SCHEMA_VERSION) >> "sv"
@@ -99,9 +98,9 @@ class KafkaBrokerMessageProducerIntegrationTest extends Specification {
     def setup() {
         producers = new Producers(leaderConfirms, everyoneConfirms, configFactory)
         brokerMessageProducer = new KafkaBrokerMessageProducer(producers,
+                new KafkaTopicMetadataFetcher(adminClient, configFactory),
                 new HermesMetrics(new MetricRegistry(), new PathsCompiler("localhost")),
-                new KafkaHeaderFactory(configFactory),
-                configFactory)
+                new MessageToKafkaProducerRecordConverter(new KafkaHeaderFactory(configFactory), configFactory))
     }
 
     def "should publish messages on only one partition for the same partition-key"() {
@@ -122,7 +121,7 @@ class KafkaBrokerMessageProducerIntegrationTest extends Specification {
         then:
         consumer.close()
 
-        List<kafka.common.OffsetAndMetadata> partitionsWithMessagesData = adminClient
+        List<OffsetAndMetadata> partitionsWithMessagesData = adminClient
                 .listConsumerGroupOffsets(consumerGroupId.asString())
                 .partitionsToOffsetAndMetadata()
                 .get().values().stream()
@@ -151,7 +150,7 @@ class KafkaBrokerMessageProducerIntegrationTest extends Specification {
         then:
         consumer.close()
 
-        List<kafka.common.OffsetAndMetadata> partitionsWithMessagesData = adminClient
+        List<OffsetAndMetadata> partitionsWithMessagesData = adminClient
                 .listConsumerGroupOffsets(consumerGroupId.asString())
                 .partitionsToOffsetAndMetadata()
                 .get().values().stream()
@@ -161,18 +160,18 @@ class KafkaBrokerMessageProducerIntegrationTest extends Specification {
         partitionsWithMessagesData.size() == NUMBER_OF_PARTITION
     }
 
-    private AvroMessage generateAvroMessage(String partitionKey) {
+    private static AvroMessage generateAvroMessage(String partitionKey) {
         def avroUser = new AvroUser()
         return new AvroMessage(UUID.randomUUID().toString(), avroUser.asBytes(), 0L, avroUser.compiledSchema, partitionKey)
     }
 
-    private def createTestSubscription(Topic topic, String subscriptionName) {
+    private static def createTestSubscription(Topic topic, String subscriptionName) {
         Subscription.create(topic.getQualifiedName(), subscriptionName, null, Subscription.State.PENDING, "test", [:], false, null, null,
-                null, null, ContentType.JSON, DeliveryType.SERIAL, [], SubscriptionMode.ANYCAST, [], null, null, false, false
+                null, ContentType.JSON, DeliveryType.SERIAL, [], SubscriptionMode.ANYCAST, [], null, null, false, false
         )
     }
 
-    private def createAvroTopic(String topicName) {
+    private static def createAvroTopic(String topicName) {
         TopicBuilder.topic(topicName)
                 .migratedFromJsonType()
                 .withContentType(ContentType.AVRO)

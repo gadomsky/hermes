@@ -2,6 +2,8 @@
     "console": {
         "title": "hermes console" // page title
         "footer": "<a href=\"http://hermes.allegro.tech\">hermes.allegro.tech</a>" // page footer
+        "isDangerousEnvironment": false  // should env alert be alert-danger
+        "environmentName": "LOCAL"  // console environment displayed in navbar
     },
     "dashboard": {
         "metrics": "", // link to metrics dashboard
@@ -55,6 +57,9 @@
         "removeSchema": false,
         "buttonsExtension": "<a class=\"btn btn-info {{topic.contentType === 'JSON' ? 'ng-show' : 'ng-hide'}}\" ng-href='http://migrator.example/topics/{{topic.name}}'>Migrate to AVRO</a>",
         "offlineClientsEnabled": false
+    },
+    "group": {
+        "nonAdminCreationEnabled": false
     },
     "subscription": {
         "endpointAddressResolverMetadata": {

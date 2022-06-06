@@ -2,10 +2,9 @@ package pl.allegro.tech.hermes.management.api.auth;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import pl.allegro.tech.hermes.api.Subscription;
+import pl.allegro.tech.hermes.api.Group;
 import pl.allegro.tech.hermes.api.Topic;
-import pl.allegro.tech.hermes.domain.topic.TopicRepository;
-import pl.allegro.tech.hermes.management.domain.subscription.CreatorRights;
+import pl.allegro.tech.hermes.management.config.GroupProperties;
 
 import javax.ws.rs.container.ContainerRequestContext;
 
@@ -15,11 +14,11 @@ import javax.ws.rs.container.ContainerRequestContext;
 @Component
 public class ManagementRights {
 
-    private final TopicRepository topicRepository;
+    private final GroupProperties groupProperties;
 
     @Autowired
-    public ManagementRights(TopicRepository topicRepository) {
-        this.topicRepository = topicRepository;
+    public ManagementRights(GroupProperties groupProperties) {
+        this.groupProperties = groupProperties;
     }
 
     public boolean isUserAllowedToManageTopic(Topic topic, ContainerRequestContext requestContext) {
@@ -27,22 +26,12 @@ public class ManagementRights {
                 getOwnershipResolver(requestContext).isUserAnOwner(topic.getOwner());
     }
 
-    public boolean isUserAllowedToCreateSubscription(Subscription subscription, ContainerRequestContext requestContext) {
-        return !topicRepository.isSubscribingRestricted(subscription.getTopicName()) ||
-                isAdmin(requestContext) || isTopicOwner(subscription, requestContext);
+    public boolean isUserAllowedToCreateGroup(ContainerRequestContext requestContext) {
+        return isAdmin(requestContext) || groupProperties.isNonAdminCreationEnabled();
     }
 
-    public boolean isUserAllowedToManageSubscription(Subscription subscription, ContainerRequestContext requestContext) {
-        return isAdmin(requestContext) || isTopicOwner(subscription, requestContext) ||
-                isSubscriptionOwner(subscription, requestContext);
-    }
-
-    private boolean isTopicOwner(Subscription subscription, ContainerRequestContext requestContext) {
-        return getOwnershipResolver(requestContext).isUserAnOwner(topicRepository.getTopicDetails(subscription.getTopicName()).getOwner());
-    }
-
-    private boolean isSubscriptionOwner(Subscription subscription, ContainerRequestContext requestContext) {
-        return getOwnershipResolver(requestContext).isUserAnOwner(subscription.getOwner());
+    private boolean isUserAllowedToManageGroup(ContainerRequestContext requestContext) {
+        return isAdmin(requestContext);
     }
 
     private boolean isAdmin(ContainerRequestContext requestContext) {
@@ -53,25 +42,25 @@ public class ManagementRights {
         return (SecurityProvider.OwnershipResolver) requestContext.getProperty(AuthorizationFilter.OWNERSHIP_RESOLVER);
     }
 
-    public CreatorRights getSubscriptionCreatorRights(ContainerRequestContext requestContext) {
-        return new SubscriptionCreatorRights(requestContext);
+    public CreatorRights<Group> getGroupCreatorRights(ContainerRequestContext requestContext) {
+        return new GroupCreatorRights(requestContext);
     }
 
-    private class SubscriptionCreatorRights implements CreatorRights {
+    class GroupCreatorRights implements CreatorRights<Group> {
         private ContainerRequestContext requestContext;
 
-        private SubscriptionCreatorRights(ContainerRequestContext requestContext) {
+        GroupCreatorRights(ContainerRequestContext requestContext) {
             this.requestContext = requestContext;
         }
 
         @Override
-        public boolean allowedToManage(Subscription subscription) {
-            return ManagementRights.this.isUserAllowedToManageSubscription(subscription, requestContext);
+        public boolean allowedToManage(Group group) {
+            return ManagementRights.this.isUserAllowedToManageGroup(requestContext);
         }
 
         @Override
-        public boolean allowedToCreate(Subscription subscription) {
-            return ManagementRights.this.isUserAllowedToCreateSubscription(subscription, requestContext);
+        public boolean allowedToCreate(Group group) {
+            return ManagementRights.this.isUserAllowedToCreateGroup(requestContext);
         }
     }
 }

@@ -16,11 +16,11 @@ on topics `subscriptions` resource:
 
 Request body must contain at least:
 
-- topicName : fully qualified name of topic including group name, separated with a dot (see: [naming convention](/overview/data-model#naming-convention))
+- topicName : fully qualified name of topic including group name, separated with a dot (see: [naming convention](../overview/data-model.md#naming-convention))
 - name: name of subscription
 - description: subscription description
 - endpoint: valid URI
-- owner: who's the owner of this subscription (refer to [creating topic](/user/publishing/#creating-topic) for more information)
+- owner: who's the owner of this subscription (refer to [creating topic](../user/publishing.md#creating-topic) for more information)
 
 Minimal request:
 
@@ -49,7 +49,7 @@ subscriptionPolicy.retryClientErrors | retry on receiving 4xx status            
 subscriptionPolicy.requestTimeout    | request timeout in millis                           | 1000
 subscriptionPolicy.socketTimeout     | maximum time of inactivity between two data packets | infinity
 subscriptionPolicy.inflightSize      | max number of pending requests                      | 100
-subscriptionPolicy.backoffMultiplier | backoff multiplier for calcaulting message backoff  | 1
+subscriptionPolicy.backoffMultiplier | backoff multiplier for calculating message backoff  | 1
 subscriptionPolicy.backoffMaxIntervalInSec | maximal retry backoff in seconds              | 600
 headers                              | additional HTTP request headers                     | [] (array of headers)
 filters                              | used for skipping unwanted messages                 | [] (array of filters)
@@ -134,10 +134,12 @@ Hermes treats any response with **2xx** status code as successful delivery (e.g.
 Responses with **5xx** status code or any network issues (e.g. connection timeout) are treated as failures, unless it
 is **503** (or **429**) code, described in [back pressure section](#back-pressure).
 
-Responses with **4xx** status code are treated as failures (except **429**, see above), but by default they are not retried. 
+Responses with **4xx** status code are treated as success (except **429**, see above), 
+but by default they are not retried and won't reduce overall sending speed on subscription. 
 This is because usually when subscriber responds with *400 Bad Message* it means this message is somehow invalid and will never be parsed,
 no matter how many times Hermes would try to deliver it. This behavior can be changed using **retryClientErrors**
-flag on subscription.
+flag on subscription. When this flag is set to true, message with response code **4xx** will be retried, 
+also causing slowing down overall sending speed. See [back pressure section](#back-pressure) for more details.
 
 ## Retries
 
@@ -203,8 +205,22 @@ This counter will reset when:
 The client is able to signal it can't handle the message at the moment and Hermes Consumer will retry delivery after
 minimum of given delay.
 
-The endpoint can return **Retry-After** header, with the amount of seconds to backoff, combined with status **429** or **503**. This
-is the only case when returning **4xx** or **5xx** code does not result in slowing down the overall [sending speed](#rate-limiting).
+You can control slowing down overall [sending speed](#rate-limiting) only when returning **429** or **503** status code,
+depending on optional **Retry-After** header returned from subscription endpoint, with the amount of seconds to backoff.
+Keep in mind, that sending speed will slow down if response won't contain **Retry-After** header. Also, when you set
+**retryClientErrors** flag to true on subscription, any request with **4xx** code will be retried with slowing down 
+overall sending speed (except **429**, see above). To be sure, take a look at the below table:
+
+| status           | retryClientErrors flag | Retry-After header | retry message | slow down sending speed |
+|------------------|------------------------|--------------------|---------------|-------------------------|
+| 4xx (except 429) | false                  | not applicable     | no            | no                      |
+| 4xx (except 429) | true                   | not applicable     | yes           | yes                     |
+| 429              | false                  | not applicable     | no            | yes                     |
+| 429              | true                   | no                 | yes           | yes                     |
+| 429              | true                   | yes                | yes           | no                      |
+| 5xx (except 503) | not applicable         | not applicable     | yes           | yes                     |
+| 503              | not applicable         | no                 | yes           | yes                     |
+| 503              | not applicable         | yes                | yes           | no                      |             
 
 Regardless of the provided delay, the **Inflight TTL** of the message still applies in this situation,
 therefore the endpoint needs to ensure the total delay of consecutive **Retry-After** responses does not exceed this value.
@@ -217,7 +233,7 @@ will be resent.
 ## Rate limiting
 
 Each subscription can define a hard limit of accepted messages per second and Hermes will never cross this line. However
-below this treshold, rate limiting algorithm tries to match sending speed with current capabilities of subscriber.
+below this threshold, rate limiting algorithm tries to match sending speed with current capabilities of subscriber.
 
 For example lets take subscriber A who has declared that he is able to receive 100 msg/sec at maximum. Hermes will be
 sending messages at this rate. Now assume that there is a problem with subscriber A - 10% of requests gets timed out.
@@ -227,7 +243,7 @@ the speed will automatically increase to reach the maximum.
 This is important when trying to understand why subscriber receives less messages than expected or the subscribers lag
 is growing. First things first, you should check subscription metrics for signs of any problems.
 
-If you want to know the exact algorithm, check [rate limiting configuration page](/configuration/rate-limiting/).
+If you want to know the exact algorithm, check [rate limiting configuration page](../configuration/rate-limiting.md).
 
 ## Additional headers
 
@@ -243,7 +259,7 @@ like feature flags.
 
 It's ignored by the default implementation.
 
-See [console integration](/configuration/console/#subscription-configuration) for more information.
+See [console integration](../configuration/console.md#subscription-configuration) for more information.
 
 ## Message filtering
 
@@ -396,7 +412,7 @@ Verify the OAuth provider is registered by calling `GET` on `/oauth/providers` a
 Hermes HTTP endpoints return asterisks (`******`) in place of the actual secrets.
 
 **Important**: Note that OAuth configuration credentials (secrets, passwords) are stored as plaintext in Zookeeper.
-Make sure access to it is [properly secured](/configuration/kafka-and-zookeeper#Zookeeper)!
+Make sure access to it is [properly secured](../configuration/kafka-and-zookeeper.md#zookeeper)!
 
 #### Requesting tokens
 
@@ -419,7 +435,7 @@ Both OAuth 2 server-side grants are supported by Hermes in order to secure subsc
 
 #### Client credentials grant
 
-[Cient credentials grant](https://tools.ietf.org/html/rfc6749#section-4.4) is the simpler OAuth grant type where a client (Hermes)
+[Client credentials grant](https://tools.ietf.org/html/rfc6749#section-4.4) is the simpler OAuth grant type where a client (Hermes)
 is given permission to send messages to subscription endpoint.
 To acquire an access token Hermes will use it's credentials configured in a specific OAuth provider definition.
 
@@ -526,10 +542,13 @@ Hermes gives an option to easily retransmit messages that are still available on
 /topics/{topicName}/subscriptions/{subscriptionName}/retransmission
 ```
 
-The message body can be of following format:
+The message body should in the following format:
 
-* ISO date: `2015-09-03T13:30:00.000`
-* number of hours to retransmit: `-6h`
+```json
+{
+  "retransmissionDate" : "2021-10-25T00:00:00+02:00"
+}
+```
 
 Hermes will find message offset in Kafka, that is closes to the given date and initiate retransmission. In return, you will
 receive list of offsets from which retransmission will be started per partition.
@@ -644,4 +663,4 @@ It returns array of message tracking information in following format:
 
 Sending delay can be defined for each serial subscription. Consumers will wait for a given time before trying to deliver a message.
 This might be useful in situations when there are multiple topics that sends events in the same time, but you want to increase
-chance that events from one topics will be delivered later than events from another topic.
+chance that events from one topic will be delivered later than events from another topic.

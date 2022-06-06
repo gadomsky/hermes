@@ -5,30 +5,33 @@ var topics = angular.module('hermes.topic', [
     'hermes.topic.repository',
     'hermes.topic.metrics',
     'hermes.topic.factory',
+    'hermes.topic.avroViewer',
     'hermes.services',
     'hermes.filters',
-    'hermes.owner'
+    'hermes.owner',
+    'hermes.offlineRetransmission'
 ]);
 
-topics.controller('TopicController', ['TOPIC_CONFIG', 'TopicRepository', 'TopicMetrics', '$scope', '$location', '$stateParams', '$uibModal',
+topics.controller('TopicController', ['TOPIC_CONFIG', 'TopicRepository', 'TopicMetrics', '$scope', '$location', '$stateParams', '$uibModal', '$sce',
     'ConfirmationModal', 'toaster', 'PasswordService', 'SubscriptionFactory', 'SUBSCRIPTION_CONFIG', 'OfflineClientsRepository',
-    function (topicConfig, topicRepository, topicMetrics, $scope, $location, $stateParams, $modal, confirmationModal, toaster, passwordService,
+    function (topicConfig, topicRepository, topicMetrics, $scope, $location, $stateParams, $modal, $sce, confirmationModal, toaster, passwordService,
               subscriptionFactory, subscriptionConfig, offlineClientsRepository) {
         var groupName = $scope.groupName = $stateParams.groupName;
         var topicName = $scope.topicName = $stateParams.topicName;
-        var topicDraft;
-        var subscriptionDraft = subscriptionFactory.create(topicName);
 
         $scope.subscriptionsFetching = true;
-        $scope.offlineClientsFetching = true;
         $scope.showMessageSchema = false;
+        $scope.showRawMessageSchema = false;
         $scope.config = topicConfig;
         $scope.showFixedHeaders = subscriptionConfig.showFixedHeaders;
+        $scope.showHeadersFilter = subscriptionConfig.showHeadersFilter;
+        $scope.offlineRetransmissionEnabled = topicConfig.offlineRetransmissionEnabled;
+        $scope.iframeSource = "";
 
         topicRepository.get(topicName).then(function(topicWithSchema) {
             $scope.topic = topicWithSchema;
             $scope.topic.shortName = $scope.topic.name.substring($scope.topic.name.lastIndexOf('.') + 1);
-            $scope.topic.labelValues = $scope.topic.labels.map(function(label) { return label.value });
+            $scope.topic.labelValues = $scope.topic.labels.map(function(label) { return label.value; });
             if (topicWithSchema && topicWithSchema.createdAt && topicWithSchema.modifiedAt) {
                 var createdAt = new Date(0);
                 createdAt.setUTCSeconds(topicWithSchema.createdAt);
@@ -44,7 +47,7 @@ topics.controller('TopicController', ['TOPIC_CONFIG', 'TopicRepository', 'TopicM
                 console.error('Could not parse topic schema: ', e);
                 $scope.messageSchema = '[schema parsing failure]';
             }
-            topicDraft = _($scope.topic).clone();
+            $scope.offlineRetransmissionEnabled = $scope.offlineRetransmissionEnabled && $scope.topic.offlineStorage.enabled;
         });
 
         $scope.metricsUrls = topicMetrics.metricsUrls(groupName, topicName);
@@ -63,34 +66,38 @@ topics.controller('TopicController', ['TOPIC_CONFIG', 'TopicRepository', 'TopicM
             });
         }
 
-        function loadOfflineClients() {
-            offlineClientsRepository.get(topicName).then(function (clients) {
-                $scope.clients = clients;
-                $scope.offlineClientsFetching = false;
+        function loadIframeSource() {
+            offlineClientsRepository.getIframeSource(topicName).then(function (iframeSource) {
+                $scope.iframeSource = iframeSource.source;
             });
         }
 
         loadSubscriptions();
         loadBlacklistStatus();
         if ($scope.config.offlineClientsEnabled) {
-            loadOfflineClients();
+            loadIframeSource();
         }
 
         topicRepository.preview(topicName).then(function(preview) {
             $scope.preview = preview;
         });
 
+        $scope.trustSrc = function(src) {
+            return $sce.trustAsResourceUrl(src);
+        };
+
         $scope.edit = function () {
             $modal.open({
                 templateUrl: 'partials/modal/editTopic.html',
                 controller: 'TopicEditController',
                 size: 'lg',
+                backdrop: 'static',
                 resolve: {
                     operation: function () {
                         return 'EDIT';
                     },
                     topic: function () {
-                        return topicDraft;
+                        return $scope.topic;
                     },
                     messageSchema: function() {
                         return $scope.messageSchema;
@@ -100,8 +107,8 @@ topics.controller('TopicController', ['TOPIC_CONFIG', 'TopicRepository', 'TopicM
                     }
                 }
             }).result.then(function (result) {
-                topicDraft = _(result.topic).clone();
                 $scope.topic = result.topic;
+                $scope.offlineRetransmissionEnabled = $scope.offlineRetransmissionEnabled && $scope.topic.offlineStorage.enabled;
                 $scope.messageSchema = result.messageSchema;
             });
         };
@@ -111,6 +118,7 @@ topics.controller('TopicController', ['TOPIC_CONFIG', 'TopicRepository', 'TopicM
                 templateUrl: 'partials/modal/editTopic.html',
                 controller: 'TopicEditController',
                 size: 'lg',
+                backdrop: 'static',
                 resolve: {
                     operation: function () {
                         return 'ADD';
@@ -129,6 +137,23 @@ topics.controller('TopicController', ['TOPIC_CONFIG', 'TopicRepository', 'TopicM
                 var topicName = response.topic.name;
                 $location.path('/groups/' + groupName + '/topics/' + topicName);
             });
+        };
+
+        $scope.copyClientsToClipboard = function () {
+            topicRepository.getTopicUsers(topicName)
+                .then(function (topicUsersFromRepository) {
+                    var topicUsers = topicUsersFromRepository.join(", ");
+                    var tempElement = document.createElement('textarea');
+                    tempElement.value = topicUsers;
+                    document.body.appendChild(tempElement);
+                    tempElement.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(tempElement);
+                    toaster.pop('info', 'Info', 'All topic users has been copied to clipboard');
+                })
+                .catch(function (response) {
+                    toaster.pop('error', 'Error ' + response.status, response.data.message);
+                });
         };
 
         $scope.remove = function () {
@@ -205,6 +230,7 @@ topics.controller('TopicController', ['TOPIC_CONFIG', 'TopicRepository', 'TopicM
                 templateUrl: 'partials/modal/editSubscription.html',
                 controller: 'SubscriptionEditController',
                 size: 'lg',
+                backdrop: 'static',
                 resolve: {
                     operation: function () {
                         return 'ADD';
@@ -213,7 +239,7 @@ topics.controller('TopicController', ['TOPIC_CONFIG', 'TopicRepository', 'TopicM
                         return topicName;
                     },
                     subscription: function () {
-                        return subscriptionDraft;
+                        return subscriptionFactory.create(topicName);
                     },
                     endpointAddressResolverMetadataConfig: function() {
                         return subscriptionConfig.endpointAddressResolverMetadata;
@@ -223,11 +249,13 @@ topics.controller('TopicController', ['TOPIC_CONFIG', 'TopicRepository', 'TopicM
                     },
                     showFixedHeaders: function () {
                         return $scope.showFixedHeaders;
+                    },
+                    showHeadersFilter: function () {
+                        return $scope.showHeadersFilter;
                     }
                 }
             }).result.then(function () {
                 loadSubscriptions();
-                subscriptionDraft = subscriptionFactory.create(topicName);
             });
         };
 
@@ -241,19 +269,36 @@ topics.controller('TopicController', ['TOPIC_CONFIG', 'TopicRepository', 'TopicM
 
             toaster.pop('info', 'Info', 'Message schema has been copied to clipboard');
         };
+
+        $scope.retransmitOffline = function () {
+            $modal.open({
+                templateUrl: 'partials/modal/offlineRetransmission.html',
+                controller: 'OfflineRetransmissionController',
+                size: 'md',
+                backdrop: 'static',
+                resolve: {
+                    topic: function () {
+                        return $scope.topic;
+                    },
+                    topicConfig: function () {
+                        return $scope.config;
+                    }
+                }
+            });
+        };
     }]);
 
 topics.controller('TopicEditController', ['TOPIC_CONFIG', 'TopicRepository', '$scope', '$uibModalInstance', 'PasswordService',
     'toaster', 'topic', 'messageSchema', 'groupName', 'operation',
     function (topicConfig, topicRepository, $scope, $modal, passwordService, toaster, topic, messageSchema, groupName, operation) {
         $scope.config = topicConfig;
-
-        $scope.topic = topic;
+        $scope.topic = _(topic).clone();
         $scope.messageSchema = messageSchema;
         $scope.groupName = groupName;
         $scope.operation = operation;
 
         $scope.save = function () {
+            $scope.disableSaveButton = true;
             var promise;
             var originalTopicName = $scope.topic.name;
             passwordService.setRoot($scope.rootPassword);
@@ -261,7 +306,7 @@ topics.controller('TopicEditController', ['TOPIC_CONFIG', 'TopicRepository', '$s
             var topic = _.cloneDeep($scope.topic);
             delete topic.shortName;
 
-            topic.labels = ($scope.topic.labelValues || []).map(function(labelValue) { return {value: labelValue}} );
+            topic.labels = ($scope.topic.labelValues || []).map(function(labelValue) { return {value: labelValue};} );
             if (operation === 'ADD') {
                 topic.name = groupName + '.' + $scope.topic.shortName;
                 $scope.topic.name = topic.name;
@@ -282,7 +327,14 @@ topics.controller('TopicEditController', ['TOPIC_CONFIG', 'TopicRepository', '$s
                     })
                     .finally(function () {
                         passwordService.reset();
+                        $scope.disableSaveButton = false;
                     });
+        };
+         $scope.beautifyText = function (){
+            const obj_message = JSON.parse($scope.messageSchema);
+            if (obj_message !== undefined) {
+                $scope.messageSchema = JSON.stringify(obj_message, null, 4);
+            }
         };
 
     }]);

@@ -11,9 +11,10 @@ import pl.allegro.tech.hermes.common.admin.zookeeper.ZookeeperAdminCache;
 import pl.allegro.tech.hermes.common.config.ConfigFactory;
 import pl.allegro.tech.hermes.common.config.Configs;
 import pl.allegro.tech.hermes.common.di.factories.ModelAwareZookeeperNotifyingCacheFactory;
-import pl.allegro.tech.hermes.common.di.factories.WorkloadConstraintsRepositoryFactory;
 import pl.allegro.tech.hermes.common.exception.InternalProcessingException;
 import pl.allegro.tech.hermes.common.metric.HermesMetrics;
+import pl.allegro.tech.hermes.consumers.config.SubscriptionConfiguration;
+import pl.allegro.tech.hermes.consumers.config.SupervisorConfiguration;
 import pl.allegro.tech.hermes.consumers.consumer.offset.ConsumerPartitionAssignmentState;
 import pl.allegro.tech.hermes.consumers.consumer.offset.OffsetQueue;
 import pl.allegro.tech.hermes.consumers.health.ConsumerMonitor;
@@ -23,7 +24,6 @@ import pl.allegro.tech.hermes.consumers.registry.ConsumerNodesRegistryPaths;
 import pl.allegro.tech.hermes.consumers.subscription.cache.NotificationsBasedSubscriptionCache;
 import pl.allegro.tech.hermes.consumers.subscription.cache.SubscriptionsCache;
 import pl.allegro.tech.hermes.consumers.subscription.id.SubscriptionIds;
-import pl.allegro.tech.hermes.consumers.subscription.id.SubscriptionIdsCacheFactory;
 import pl.allegro.tech.hermes.consumers.subscription.id.ZookeeperSubscriptionIdProvider;
 import pl.allegro.tech.hermes.consumers.supervisor.ConsumerFactory;
 import pl.allegro.tech.hermes.consumers.supervisor.ConsumersExecutorService;
@@ -41,6 +41,7 @@ import pl.allegro.tech.hermes.infrastructure.zookeeper.ZookeeperGroupRepository;
 import pl.allegro.tech.hermes.infrastructure.zookeeper.ZookeeperPaths;
 import pl.allegro.tech.hermes.infrastructure.zookeeper.ZookeeperSubscriptionRepository;
 import pl.allegro.tech.hermes.infrastructure.zookeeper.ZookeeperTopicRepository;
+import pl.allegro.tech.hermes.infrastructure.zookeeper.ZookeeperWorkloadConstraintsRepository;
 import pl.allegro.tech.hermes.infrastructure.zookeeper.cache.ModelAwareZookeeperNotifyingCache;
 import pl.allegro.tech.hermes.infrastructure.zookeeper.notifications.ZookeeperInternalNotificationBus;
 import pl.allegro.tech.hermes.metrics.PathsCompiler;
@@ -78,19 +79,18 @@ class ConsumerTestRuntimeEnvironment {
     private final ZookeeperPaths zookeeperPaths = new ZookeeperPaths("/hermes");
     private final Supplier<CuratorFramework> curatorSupplier;
 
-    private GroupRepository groupRepository;
-    private TopicRepository topicRepository;
-    private SubscriptionRepository subscriptionRepository;
-    private ObjectMapper objectMapper = new ObjectMapper();
-    private ExecutorService executorService = Executors.newSingleThreadExecutor();
-    private Supplier<HermesMetrics> metricsSupplier;
-    private ConsumerNodesRegistry consumersRegistry;
-    private WorkloadConstraintsRepository workloadConstraintsRepository;
-    private CuratorFramework curator;
+    private final GroupRepository groupRepository;
+    private final TopicRepository topicRepository;
+    private final SubscriptionRepository subscriptionRepository;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+    private final Supplier<HermesMetrics> metricsSupplier;
+    private final WorkloadConstraintsRepository workloadConstraintsRepository;
+    private final CuratorFramework curator;
     private final ConsumerPartitionAssignmentState partitionAssignmentState;
 
-    private Map<String, CuratorFramework> consumerZookeeperConnections = Maps.newHashMap();
-    private List<SubscriptionsCache> subscriptionsCaches = new ArrayList<>();
+    private final Map<String, CuratorFramework> consumerZookeeperConnections = Maps.newHashMap();
+    private final List<SubscriptionsCache> subscriptionsCaches = new ArrayList<>();
 
     ConsumerTestRuntimeEnvironment(Supplier<CuratorFramework> curatorSupplier) {
         this.curatorSupplier = curatorSupplier;
@@ -102,9 +102,8 @@ class ConsumerTestRuntimeEnvironment {
                 curator, objectMapper, zookeeperPaths, topicRepository
         );
 
-        WorkloadConstraintsRepositoryFactory workloadConstraintsRepositoryFactory =
-                new WorkloadConstraintsRepositoryFactory(curator, objectMapper, zookeeperPaths);
-        this.workloadConstraintsRepository = workloadConstraintsRepositoryFactory.provide();
+        this.workloadConstraintsRepository = new ZookeeperWorkloadConstraintsRepository(curator, objectMapper, zookeeperPaths);
+
 
         this.metricsSupplier = () -> new HermesMetrics(new MetricRegistry(), new PathsCompiler("localhost"));
         this.nodesRegistryPaths = new ConsumerNodesRegistryPaths(zookeeperPaths, CLUSTER_NAME);
@@ -127,7 +126,6 @@ class ConsumerTestRuntimeEnvironment {
                 .overrideProperty(CONSUMER_WORKLOAD_CONSUMERS_PER_SUBSCRIPTION, 2)
                 .overrideProperty(Configs.CONSUMER_BACKGROUND_SUPERVISOR_INTERVAL, 1000)
                 .overrideProperty(Configs.CONSUMER_WORKLOAD_MONITOR_SCAN_INTERVAL, 1);
-        ;
         return consumerConfig;
     }
 
@@ -162,20 +160,23 @@ class ConsumerTestRuntimeEnvironment {
         );
         subscriptionsCaches.add(subscriptionsCache);
 
-        SubscriptionIds subscriptionIds = new SubscriptionIdsCacheFactory(notificationsBus, subscriptionsCache,
-                new ZookeeperSubscriptionIdProvider(curator, zookeeperPaths), consumerConfig).provide();
+        SubscriptionConfiguration subscriptionConfiguration = new SubscriptionConfiguration();
+        SubscriptionIds subscriptionIds = subscriptionConfiguration.subscriptionIds(notificationsBus, subscriptionsCache,
+                new ZookeeperSubscriptionIdProvider(curator, zookeeperPaths), consumerConfig);
 
-        ConsumerAssignmentCache consumerAssignmentCache = new ConsumerAssignmentCacheFactory(
-                curator, consumerConfig, zookeeperPaths, subscriptionsCache, subscriptionIds
-        ).provide();
+        SupervisorConfiguration supervisorConfiguration = new SupervisorConfiguration();
 
-        ClusterAssignmentCache clusterAssignmentCache = new ClusterAssignmentCacheFactory(
-                curator, consumerConfig, consumerAssignmentCache, zookeeperPaths, subscriptionIds, nodesRegistry
-        ).provide();
+        ConsumerAssignmentCache consumerAssignmentCache = supervisorConfiguration.consumerAssignmentCache(
+                curator, consumerConfig, zookeeperPaths, subscriptionIds
+        );
 
-        ConsumerAssignmentRegistry consumerAssignmentRegistry = new ConsumerAssignmentRegistryFactory(
-                curator, consumerConfig, zookeeperPaths, consumerAssignmentCache, subscriptionIds
-        ).provide();
+        ClusterAssignmentCache clusterAssignmentCache = supervisorConfiguration.clusterAssignmentCache(
+                curator, consumerConfig, zookeeperPaths, subscriptionIds, nodesRegistry
+        );
+
+        ConsumerAssignmentRegistry consumerAssignmentRegistry = supervisorConfiguration.consumerAssignmentRegistry(
+                curator, consumerConfig, zookeeperPaths, subscriptionIds
+        );
 
 
         SelectiveSupervisorController supervisor = new SelectiveSupervisorController(

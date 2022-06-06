@@ -22,6 +22,8 @@ import pl.allegro.tech.hermes.domain.topic.preview.MessagePreview;
 import pl.allegro.tech.hermes.domain.topic.preview.MessagePreviewRepository;
 import pl.allegro.tech.hermes.management.config.TopicProperties;
 import pl.allegro.tech.hermes.management.domain.Auditor;
+import pl.allegro.tech.hermes.management.domain.auth.RequestUser;
+import pl.allegro.tech.hermes.management.domain.blacklist.TopicBlacklistService;
 import pl.allegro.tech.hermes.management.domain.dc.DatacenterBoundRepositoryHolder;
 import pl.allegro.tech.hermes.management.domain.dc.MultiDatacenterRepositoryCommandExecutor;
 import pl.allegro.tech.hermes.management.domain.dc.RepositoryManager;
@@ -62,6 +64,7 @@ public class TopicService {
 
     private final TopicMetricsRepository metricRepository;
     private final MultiDCAwareService multiDCAwareService;
+    private final TopicBlacklistService topicBlacklistService;
     private final TopicValidator topicValidator;
     private final TopicContentTypeMigrationService topicContentTypeMigrationService;
     private final Clock clock;
@@ -80,7 +83,7 @@ public class TopicService {
                         GroupService groupService,
                         TopicProperties topicProperties,
                         SchemaService schemaService, TopicMetricsRepository metricRepository,
-                        TopicValidator topicValidator,
+                        TopicBlacklistService topicBlacklistService, TopicValidator topicValidator,
                         TopicContentTypeMigrationService topicContentTypeMigrationService,
                         Clock clock,
                         Auditor auditor,
@@ -93,6 +96,7 @@ public class TopicService {
         this.topicProperties = topicProperties;
         this.schemaService = schemaService;
         this.metricRepository = metricRepository;
+        this.topicBlacklistService = topicBlacklistService;
         this.topicValidator = topicValidator;
         this.topicContentTypeMigrationService = topicContentTypeMigrationService;
         this.clock = clock;
@@ -102,10 +106,11 @@ public class TopicService {
         this.topicOwnerCache = topicOwnerCache;
     }
 
-    public void createTopicWithSchema(TopicWithSchema topicWithSchema, String createdBy, CreatorRights isAllowedToManage) {
+    public void createTopicWithSchema(TopicWithSchema topicWithSchema, RequestUser createdBy, CreatorRights isAllowedToManage) {
         Topic topic = topicWithSchema.getTopic();
-        auditor.beforeObjectCreation(createdBy, topic);
-        topicValidator.ensureCreatedTopicIsValid(topic, isAllowedToManage);
+        auditor.beforeObjectCreation(createdBy.getUsername(), topic);
+        groupService.checkGroupExists(topic.getName().getGroupName());
+        topicValidator.ensureCreatedTopicIsValid(topic, createdBy, isAllowedToManage);
         ensureTopicDoesNotExist(topic);
 
         boolean validateAndRegisterSchema = AVRO.equals(topic.getContentType()) || (topic.isJsonToAvroDryRunEnabled()
@@ -132,7 +137,7 @@ public class TopicService {
         }
     }
 
-    private void registerAvroSchema(boolean shouldRegister, TopicWithSchema topicWithSchema, String createdBy) {
+    private void registerAvroSchema(boolean shouldRegister, TopicWithSchema topicWithSchema, RequestUser createdBy) {
         if (shouldRegister) {
             try {
                 schemaService.registerSchema(topicWithSchema.getTopic(), topicWithSchema.getSchema());
@@ -144,21 +149,21 @@ public class TopicService {
         }
     }
 
-    private void createTopic(Topic topic, String createdBy, CreatorRights creatorRights) {
-        topicValidator.ensureCreatedTopicIsValid(topic, creatorRights);
+    private void createTopic(Topic topic, RequestUser createdBy, CreatorRights creatorRights) {
+        topicValidator.ensureCreatedTopicIsValid(topic, createdBy, creatorRights);
 
         if (!multiDCAwareService.topicExists(topic)) {
-            createTopicInBrokers(topic);
-            auditor.objectCreated(createdBy, topic);
+            createTopicInBrokers(topic, createdBy);
+            auditor.objectCreated(createdBy.getUsername(), topic);
             topicOwnerCache.onCreatedTopic(topic);
         } else {
             logger.info("Skipping creation of topic {} on brokers, topic already exists", topic.getQualifiedName());
         }
 
-        multiDcExecutor.execute(new CreateTopicRepositoryCommand(topic));
+        multiDcExecutor.executeByUser(new CreateTopicRepositoryCommand(topic), createdBy);
     }
 
-    private void createTopicInBrokers(Topic topic) {
+    private void createTopicInBrokers(Topic topic, RequestUser createdBy) {
         try {
             multiDCAwareService.manageTopic(brokerTopicManagement ->
                     brokerTopicManagement.createTopic(topic)
@@ -168,16 +173,19 @@ public class TopicService {
                     String.format("Could not create topic %s, rollback topic creation.", topic.getQualifiedName()),
                     exception
             );
-            multiDcExecutor.execute(new RemoveTopicRepositoryCommand(topic.getName()));
+            multiDcExecutor.executeByUser(new RemoveTopicRepositoryCommand(topic.getName()), createdBy);
         }
     }
 
-    public void removeTopicWithSchema(Topic topic, String removedBy) {
-        auditor.beforeObjectRemoval(removedBy, Topic.class.getSimpleName(), topic.getQualifiedName());
+    public void removeTopicWithSchema(Topic topic, RequestUser removedBy) {
+        auditor.beforeObjectRemoval(removedBy.getUsername(), Topic.class.getSimpleName(), topic.getQualifiedName());
         topicRepository.ensureTopicHasNoSubscriptions(topic.getName());
         removeSchema(topic);
         if (!topicProperties.isAllowRemoval()) {
             throw new TopicRemovalDisabledException(topic);
+        }
+        if (topicBlacklistService.isBlacklisted(topic.getQualifiedName())) {
+            topicBlacklistService.unblacklist(topic.getQualifiedName(), removedBy);
         }
         removeTopic(topic, removedBy);
     }
@@ -189,19 +197,19 @@ public class TopicService {
         }
     }
 
-    private void removeTopic(Topic topic, String removedBy) {
-        multiDcExecutor.execute(new RemoveTopicRepositoryCommand(topic.getName()));
+    private void removeTopic(Topic topic, RequestUser removedBy) {
+        multiDcExecutor.executeByUser(new RemoveTopicRepositoryCommand(topic.getName()), removedBy);
         multiDCAwareService.manageTopic(brokerTopicManagement -> brokerTopicManagement.removeTopic(topic));
-        auditor.objectRemoved(removedBy, Topic.class.getSimpleName(), topic.getQualifiedName());
+        auditor.objectRemoved(removedBy.getUsername(), topic);
         topicOwnerCache.onRemovedTopic(topic);
     }
 
-    public void updateTopicWithSchema(TopicName topicName, PatchData patch, String modifiedBy) {
+    public void updateTopicWithSchema(TopicName topicName, PatchData patch, RequestUser modifiedBy) {
         Topic topic = getTopicDetails(topicName);
         extractSchema(patch)
                 .ifPresent(schema -> {
                     schemaService.registerSchema(topic, schema);
-                    scheduleTouchTopic(topicName);
+                    scheduleTouchTopic(topicName, modifiedBy);
                 });
         updateTopic(topicName, patch, modifiedBy);
     }
@@ -210,14 +218,14 @@ public class TopicService {
         return Optional.ofNullable(patch.getPatch().get("schema")).map(o -> (String) o);
     }
 
-    public void updateTopic(TopicName topicName, PatchData patch, String modifiedBy) {
-        auditor.beforeObjectUpdate(modifiedBy, Topic.class.getSimpleName(), topicName, patch);
+    public void updateTopic(TopicName topicName, PatchData patch, RequestUser modifiedBy) {
+        auditor.beforeObjectUpdate(modifiedBy.getUsername(), Topic.class.getSimpleName(), topicName, patch);
         groupService.checkGroupExists(topicName.getGroupName());
 
         Topic retrieved = getTopicDetails(topicName);
         Topic modified = Patch.apply(retrieved, patch);
 
-        topicValidator.ensureUpdatedTopicIsValid(modified, retrieved);
+        topicValidator.ensureUpdatedTopicIsValid(modified, retrieved, modifiedBy);
 
         if (!retrieved.equals(modified)) {
             Instant beforeMigrationInstant = clock.instant();
@@ -226,23 +234,23 @@ public class TopicService {
                         brokerTopicManagement.updateTopic(modified)
                 );
             }
-            multiDcExecutor.execute(new UpdateTopicRepositoryCommand(modified));
+            multiDcExecutor.executeByUser(new UpdateTopicRepositoryCommand(modified), modifiedBy);
 
             if (!retrieved.wasMigratedFromJsonType() && modified.wasMigratedFromJsonType()) {
                 logger.info("Waiting until all subscriptions have consumers assigned during topic {} content type migration...", topicName.qualifiedName());
                 topicContentTypeMigrationService.waitUntilAllSubscriptionsHasConsumersAssigned(modified,
                         Duration.ofSeconds(topicProperties.getSubscriptionsAssignmentsCompletedTimeoutSeconds()));
                 logger.info("Notifying subscriptions' consumers about changes in topic {} content type...", topicName.qualifiedName());
-                topicContentTypeMigrationService.notifySubscriptions(modified, beforeMigrationInstant);
+                topicContentTypeMigrationService.notifySubscriptions(modified, beforeMigrationInstant, modifiedBy);
             }
-            auditor.objectUpdated(modifiedBy, retrieved, modified);
+            auditor.objectUpdated(modifiedBy.getUsername(), retrieved, modified);
             topicOwnerCache.onUpdatedTopic(retrieved, modified);
         }
     }
 
-    public void touchTopic(TopicName topicName) {
+    public void touchTopic(TopicName topicName, RequestUser touchedBy) {
         logger.info("Touching topic {}", topicName.qualifiedName());
-        multiDcExecutor.execute(new TouchTopicRepositoryCommand(topicName));
+        multiDcExecutor.executeByUser(new TouchTopicRepositoryCommand(topicName), touchedBy);
     }
 
     /**
@@ -250,15 +258,15 @@ public class TopicService {
      * However, schema-registry can be distributed so when schema is written there then it can not be available on all nodes immediately.
      * This is the reason why we delay touch of topic here, to wait until schema is distributed on schema-registry nodes.
      */
-    public void scheduleTouchTopic(TopicName topicName) {
+    public void scheduleTouchTopic(TopicName topicName, RequestUser touchedBy) {
         if (topicProperties.isTouchSchedulerEnabled()) {
             logger.info("Scheduling touch of topic {}", topicName.qualifiedName());
-            scheduledTopicExecutor.schedule(() -> touchTopic(topicName),
+            scheduledTopicExecutor.schedule(() -> touchTopic(topicName, touchedBy),
                     topicProperties.getTouchDelayInSeconds(),
                     TimeUnit.SECONDS
             );
         } else {
-            touchTopic(topicName);
+            touchTopic(topicName, touchedBy);
         }
     }
 

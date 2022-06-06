@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 /**
  * This class could have a much better structure, however it has this one due to compatibility with old JSON config file format.
@@ -23,6 +24,7 @@ public class ConsoleProperties {
     private TopicView topic = new TopicView();
     private SubscriptionView subscription = new SubscriptionView();
     private ConsistencyView consistency = new ConsistencyView();
+    private GroupView group = new GroupView();
 
     public Dashboard getDashboard() {
         return dashboard;
@@ -72,10 +74,19 @@ public class ConsoleProperties {
         this.consistency = consistency;
     }
 
+    public GroupView getGroup() {
+        return group;
+    }
+
+    public void setGroup(GroupView group) {
+        this.group = group;
+    }
+
     public static final class Console {
         private String title = "hermes console";
         private String footer = "";
-
+        private String environmentName = "LOCAL";
+        private boolean isDangerousEnvironment = false;
 
         public String getTitle() {
             return title;
@@ -91,6 +102,22 @@ public class ConsoleProperties {
 
         public void setFooter(String footer) {
             this.footer = footer;
+        }
+
+        public boolean isDangerousEnvironment() {
+            return isDangerousEnvironment;
+        }
+
+        public void setDangerousEnvironment(boolean isDangerousEnvironment) {
+            this.isDangerousEnvironment = isDangerousEnvironment;
+        }
+
+        public String getEnvironmentName() {
+            return environmentName;
+        }
+
+        public void setEnvironmentName(String environmentName) {
+            this.environmentName = environmentName;
         }
     }
 
@@ -315,12 +342,18 @@ public class ConsoleProperties {
         private String buttonsExtension = "";
         private boolean removeSchema = false;
         private boolean schemaIdAwareSerializationEnabled = false;
+        private boolean avroContentTypeMetadataRequired = true;
         private List<TopicContentType> contentTypes = Lists.newArrayList(
                 new TopicContentType("AVRO", "AVRO"),
                 new TopicContentType("JSON", "JSON")
         );
         private boolean readOnlyModeEnabled = false;
         private Set<String> allowedTopicLabels = Collections.emptySet();
+        private List<RetentionUnit> retentionUnits = Lists.newArrayList(
+                new RetentionUnit("DAYS", "DAYS")
+        );
+        private boolean offlineRetransmissionEnabled = false;
+        private String offlineRetransmissionDescription = "Offline retransmission";
 
         public boolean isMessagePreviewEnabled() {
             return messagePreviewEnabled;
@@ -386,10 +419,20 @@ public class ConsoleProperties {
             this.removeSchema = removeSchema;
         }
 
-        public boolean isSchemaIdAwareSerializationEnabled() { return schemaIdAwareSerializationEnabled; }
+        public boolean isSchemaIdAwareSerializationEnabled() {
+            return schemaIdAwareSerializationEnabled;
+        }
 
         public void setSchemaIdAwareSerializationEnabled(boolean schemaIdAwareSerializationEnabled) {
             this.schemaIdAwareSerializationEnabled = schemaIdAwareSerializationEnabled;
+        }
+
+        public boolean isAvroContentTypeMetadataRequired() {
+            return avroContentTypeMetadataRequired;
+        }
+
+        public void setAvroContentTypeMetadataRequired(boolean avroContentTypeMetadataRequired) {
+            this.avroContentTypeMetadataRequired = avroContentTypeMetadataRequired;
         }
 
         public boolean isReadOnlyModeEnabled() {
@@ -399,12 +442,37 @@ public class ConsoleProperties {
         public void setReadOnlyModeEnabled(boolean readOnlyModeEnabled) {
             this.readOnlyModeEnabled = readOnlyModeEnabled;
         }
+
+        public List<RetentionUnit> getRetentionUnits() {
+            return retentionUnits;
+        }
+
+        public void setRetentionUnits(List<RetentionUnit> retentionUnits) {
+            this.retentionUnits = retentionUnits;
+        }
+
+        public boolean getOfflineRetransmissionEnabled() {
+            return offlineRetransmissionEnabled;
+        }
+
+        public void setOfflineRetransmissionEnabled(boolean offlineRetransmissionEnabled) {
+            this.offlineRetransmissionEnabled = offlineRetransmissionEnabled;
+        }
+
+        public String getOfflineRetransmissionDescription() {
+            return offlineRetransmissionDescription;
+        }
+
+        public void setOfflineRetransmissionDescription(String offlineRetransmissionDescription) {
+            this.offlineRetransmissionDescription = offlineRetransmissionDescription;
+        }
     }
 
     public static final class DefaultTopicView {
         private String ack = "LEADER";
         private String contentType = "JSON";
         private RetentionTime retentionTime = new RetentionTime();
+        private DefaultOfflineStorageView offlineStorage = new DefaultOfflineStorageView();
 
         public String getAck() {
             return ack;
@@ -429,10 +497,40 @@ public class ConsoleProperties {
         public void setRetentionTime(RetentionTime retentionTime) {
             this.retentionTime = retentionTime;
         }
+
+        public DefaultOfflineStorageView getOfflineStorage() {
+            return offlineStorage;
+        }
+
+        public void setOfflineStorage(DefaultOfflineStorageView offlineStorage) {
+            this.offlineStorage = offlineStorage;
+        }
+    }
+
+    public static final class DefaultOfflineStorageView {
+        private boolean enabled = false;
+        private RetentionTime retentionTime = new RetentionTime();
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public RetentionTime getRetentionTime() {
+            return retentionTime;
+        }
+
+        public void setRetentionTime(RetentionTime retentionTime) {
+            this.retentionTime = retentionTime;
+        }
     }
 
     public static final class RetentionTime {
         private int duration = 1;
+        private TimeUnit retentionUnit = TimeUnit.DAYS;
 
         public int getDuration() {
             return duration;
@@ -440,6 +538,14 @@ public class ConsoleProperties {
 
         public void setDuration(int duration) {
             this.duration = duration;
+        }
+
+        public TimeUnit getRetentionUnit() {
+            return retentionUnit;
+        }
+
+        public void setRetentionUnit(TimeUnit retentionUnit) {
+            this.retentionUnit = retentionUnit;
         }
     }
 
@@ -451,6 +557,35 @@ public class ConsoleProperties {
         }
 
         public TopicContentType(String value, String label) {
+            this.value = value;
+            this.label = label;
+        }
+
+        public String getValue() {
+            return value;
+        }
+
+        public void setValue(String value) {
+            this.value = value;
+        }
+
+        public String getLabel() {
+            return label;
+        }
+
+        public void setLabel(String label) {
+            this.label = label;
+        }
+    }
+
+    public static final class RetentionUnit {
+        private String value = "";
+        private String label = "";
+
+        public RetentionUnit() {
+        }
+
+        public RetentionUnit(String value, String label) {
             this.value = value;
             this.label = label;
         }
@@ -517,6 +652,8 @@ public class ConsoleProperties {
     public static final class SubscriptionView {
         private Map<String, EndpointAddressResolverMetadata> endpointAddressResolverMetadata = new HashMap<>();
         private boolean showHeadersFilter = false;
+        private boolean showFixedHeaders = false;
+        private int requestTimeoutWarningThreshold = 1001;
         private DefaultSubscriptionView defaults = new DefaultSubscriptionView();
         private List<SubscriptionDeliveryType> deliveryTypes = Lists.newArrayList(
                 new SubscriptionDeliveryType("SERIAL", "SERIAL"),
@@ -553,6 +690,34 @@ public class ConsoleProperties {
 
         public void setDeliveryTypes(List<SubscriptionDeliveryType> deliveryTypes) {
             this.deliveryTypes = deliveryTypes;
+        }
+
+        public boolean isShowFixedHeaders() {
+            return showFixedHeaders;
+        }
+
+        public void setShowFixedHeaders(boolean showFixedHeaders) {
+            this.showFixedHeaders = showFixedHeaders;
+        }
+
+        public int getRequestTimeoutWarningThreshold() {
+            return requestTimeoutWarningThreshold;
+        }
+
+        public void setRequestTimeoutWarningThreshold(int requestTimeoutWarningThreshold) {
+            this.requestTimeoutWarningThreshold = requestTimeoutWarningThreshold;
+        }
+    }
+
+    public static final class GroupView {
+        private boolean nonAdminCreationEnabled = false;
+
+        public boolean isNonAdminCreationEnabled() {
+            return nonAdminCreationEnabled;
+        }
+
+        public void setNonAdminCreationEnabled(boolean nonAdminCreationEnabled) {
+            this.nonAdminCreationEnabled = nonAdminCreationEnabled;
         }
     }
 
@@ -609,6 +774,7 @@ public class ConsoleProperties {
 
     public static final class SubscriptionPolicy {
         private int messageTtl = 3600;
+        private int requestTimeout = 1000;
 
         public int getMessageTtl() {
             return messageTtl;
@@ -616,6 +782,14 @@ public class ConsoleProperties {
 
         public void setMessageTtl(int messageTtl) {
             this.messageTtl = messageTtl;
+        }
+
+        public int getRequestTimeout() {
+            return requestTimeout;
+        }
+
+        public void setRequestTimeout(int requestTimeout) {
+            this.requestTimeout = requestTimeout;
         }
     }
 

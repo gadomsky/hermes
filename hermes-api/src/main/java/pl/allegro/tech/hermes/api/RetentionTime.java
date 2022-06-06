@@ -1,25 +1,43 @@
 package pl.allegro.tech.hermes.api;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import pl.allegro.tech.hermes.api.constraints.AdminPermitted;
 
+import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 
 public class RetentionTime {
+    private static final TimeUnit DEFAULT_UNIT = TimeUnit.DAYS;
 
-    @Min(1)
+    @Min(0)
+    @Max(value = 7, groups = AdminPermitted.class)
     private final int duration;
 
-    public RetentionTime(@JsonProperty("duration") int duration) {
+    private final TimeUnit retentionUnit;
+
+    public RetentionTime(@JsonProperty("duration") int duration, @JsonProperty("retentionUnit") TimeUnit unit) {
         this.duration = duration;
+        this.retentionUnit = unit == null ? DEFAULT_UNIT : unit;
     }
 
-    public static RetentionTime of(int duration) {
-        return new RetentionTime(duration);
+    public static RetentionTime of(int duration, TimeUnit unit) {
+        return new RetentionTime(duration, unit);
     }
 
     public int getDuration() {
         return duration;
+    }
+
+    @JsonIgnore
+    public long getDurationInMillis() {
+        return retentionUnit.toMillis(duration);
+    }
+
+    public TimeUnit getRetentionUnit() {
+        return retentionUnit;
     }
 
     @Override
@@ -36,6 +54,6 @@ public class RetentionTime {
             return false;
         }
         final RetentionTime other = (RetentionTime) obj;
-        return Objects.equals(this.duration, other.duration);
+        return Objects.equals(this.duration, other.duration) && Objects.equals(this.retentionUnit, other.retentionUnit);
     }
 }

@@ -38,7 +38,10 @@ management:
     periodSeconds: 30
     enabled: true
 
-audit.enabled: false
+audit:
+  isLoggingAuditEnabled: false
+  isEventAuditEnabled: false
+  eventUrl: null
 
 topic:
   allowedTopicLabels: &ALLOWED_LABELS
@@ -56,3 +59,16 @@ console:
   configurationType: classpath_resource
   topic:
     allowedTopicLabels: *ALLOWED_LABELS
+    retentionUnits:
+      - value: TimeUnit.HOURS
+        label: Hours
+      - value: TimeUnit.DAYS
+        label: Days
+    defaults:
+      offlineStorage:
+        retentionTime:
+          duration: 60
+
+  subscription:
+    showHeadersFilter: false
+    showFixedHeaders: false

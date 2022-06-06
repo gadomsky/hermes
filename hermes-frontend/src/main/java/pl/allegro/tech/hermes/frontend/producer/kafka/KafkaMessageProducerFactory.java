@@ -3,11 +3,9 @@ package pl.allegro.tech.hermes.frontend.producer.kafka;
 import com.google.common.collect.ImmutableMap;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
-import org.glassfish.hk2.api.Factory;
 import pl.allegro.tech.hermes.common.config.ConfigFactory;
 import pl.allegro.tech.hermes.common.config.Configs;
 
-import javax.inject.Inject;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -66,18 +64,16 @@ import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_PASSWORD_CO
 import static org.apache.kafka.common.config.SslConfigs.SSL_KEY_PASSWORD_CONFIG;
 import static org.apache.kafka.common.config.SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG;
 
-public class KafkaMessageProducerFactory implements Factory<Producers> {
+public class KafkaMessageProducerFactory {
     private static final String ACK_ALL = "-1";
     private static final String ACK_LEADER = "1";
 
-    private ConfigFactory configFactory;
+    private final ConfigFactory configFactory;
 
-    @Inject
     public KafkaMessageProducerFactory(ConfigFactory configFactory) {
         this.configFactory = configFactory;
     }
 
-    @Override
     public Producers provide() {
         Map<String, Object> props = new HashMap<>();
         props.put(BOOTSTRAP_SERVERS_CONFIG, getString(KAFKA_BROKER_LIST));
@@ -139,10 +135,5 @@ public class KafkaMessageProducerFactory implements Factory<Producers> {
 
     private Integer getInt(Configs key) {
         return configFactory.getIntProperty(key);
-    }
-
-    @Override
-    public void dispose(Producers producer) {
-        producer.close();
     }
 }

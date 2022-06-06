@@ -9,12 +9,51 @@ import pl.allegro.tech.hermes.integration.IntegrationTest;
 import javax.ws.rs.core.Response;
 import java.util.stream.Stream;
 
-import static pl.allegro.tech.hermes.api.ErrorCode.VALIDATION_ERROR;
+import static pl.allegro.tech.hermes.api.ErrorCode.GROUP_NAME_IS_INVALID;
 import static pl.allegro.tech.hermes.integration.test.HermesAssertions.assertThat;
 import static pl.allegro.tech.hermes.test.helper.builder.GroupBuilder.group;
 import static pl.allegro.tech.hermes.test.helper.builder.TopicBuilder.topic;
 
 public class GroupManagementTest extends IntegrationTest {
+
+    @Test
+    public void shouldEmmitAuditEventWhenGroupCreated() {
+        //when
+        management.group().create(group("exampleGroup").build());
+
+        //then
+        assertThat(
+                auditEvents.getLastRequest().getBodyAsString()
+        ).contains("CREATED", "exampleGroup");
+    }
+
+    @Test
+    public void shouldEmmitAuditEventWhenGroupRemoved() {
+        //given
+        operations.createGroup("anotherExampleGroup");
+
+        //when
+        management.group().delete("anotherExampleGroup");
+
+        //then
+        assertThat(
+                auditEvents.getLastRequest().getBodyAsString()
+        ).contains("REMOVED", "anotherExampleGroup");
+    }
+
+    @Test
+    public void shouldEmmitAuditEventWhenGroupUpdated() {
+        //given
+        operations.createGroup("anotherOneExampleGroup");
+
+        //when
+        management.group().update("anotherOneExampleGroup", group("anotherOneExampleGroup").build());
+
+        //then
+        assertThat(
+                auditEvents.getLastRequest().getBodyAsString()
+        ).contains("UPDATED", "anotherOneExampleGroup");
+    }
 
     @Test
     public void shouldCreateGroup() {
@@ -37,7 +76,7 @@ public class GroupManagementTest extends IntegrationTest {
     }
 
     @Test
-    void shouldCreateAndFetchGroupDetails() throws InterruptedException {
+    void shouldCreateAndFetchGroupDetails() {
         //given
         Group group = group("groupWithDetails").build();
         management.group().create(group);
@@ -58,7 +97,7 @@ public class GroupManagementTest extends IntegrationTest {
         Response response = management.group().create(groupWithNameWithSpaces);
 
         // then
-        assertThat(response).hasStatus(Response.Status.BAD_REQUEST).hasErrorCode(VALIDATION_ERROR);
+        assertThat(response).hasStatus(Response.Status.BAD_REQUEST).hasErrorCode(GROUP_NAME_IS_INVALID);
     }
 
     @Test

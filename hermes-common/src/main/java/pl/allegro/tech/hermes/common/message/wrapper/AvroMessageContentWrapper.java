@@ -6,7 +6,6 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.avro.util.Utf8;
 import pl.allegro.tech.hermes.schema.CompiledSchema;
 
-import javax.inject.Inject;
 import java.time.Clock;
 import java.util.Collections;
 import java.util.HashMap;
@@ -28,7 +27,6 @@ public class AvroMessageContentWrapper {
 
     private final Clock clock;
 
-    @Inject
     public AvroMessageContentWrapper(Clock clock) {
         this.clock = clock;
     }
@@ -60,16 +58,20 @@ public class AvroMessageContentWrapper {
         }
     }
 
-    byte[] wrapContent(byte[] message, String id, long timestamp, Schema schema, Map<String, String> externalMetadata) {
-        GenericRecord genericRecord = bytesToRecord(message, schema);
-        try {
-            genericRecord.put(METADATA_MARKER, metadataMap(id, timestamp, externalMetadata));
-            return recordToBytes(genericRecord, schema);
-        } catch (Exception e) {
-            if (e instanceof AvroRuntimeException && e.getMessage().equals("Not a valid schema field: __metadata")) {
-                throw new AvroInvalidMetadataException("Schema does not contain mandatory __metadata field for Hermes internal metadata. Please fix topic schema.", e);
+    public byte[] wrapContent(byte[] message, String id, long timestamp, Schema schema, Map<String, String> externalMetadata) {
+        if (schema.getField(METADATA_MARKER) != null) {
+            GenericRecord genericRecord = bytesToRecord(message, schema);
+            try {
+                genericRecord.put(METADATA_MARKER, metadataMap(id, timestamp, externalMetadata));
+                return recordToBytes(genericRecord, schema);
+            } catch (Exception e) {
+                if (e instanceof AvroRuntimeException && e.getMessage().equals("Not a valid schema field: __metadata")) {
+                    throw new AvroInvalidMetadataException("Schema does not contain mandatory __metadata field for Hermes internal metadata. Please fix topic schema.", e);
+                }
+                throw new WrappingException("Could not wrap avro message", e);
             }
-            throw new WrappingException("Could not wrap avro message", e);
+        } else {
+            return message;
         }
     }
 

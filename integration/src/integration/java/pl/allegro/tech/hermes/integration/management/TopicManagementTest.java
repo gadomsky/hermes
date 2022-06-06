@@ -4,6 +4,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import org.assertj.core.api.Assertions;
 import org.testng.annotations.Test;
+import pl.allegro.tech.hermes.api.BlacklistStatus;
 import pl.allegro.tech.hermes.api.ContentType;
 import pl.allegro.tech.hermes.api.ErrorCode;
 import pl.allegro.tech.hermes.api.ErrorDescription;
@@ -11,12 +12,14 @@ import pl.allegro.tech.hermes.api.Group;
 import pl.allegro.tech.hermes.api.PatchData;
 import pl.allegro.tech.hermes.api.Topic;
 import pl.allegro.tech.hermes.api.TopicLabel;
+import pl.allegro.tech.hermes.api.TopicWithSchema;
 import pl.allegro.tech.hermes.integration.IntegrationTest;
 import pl.allegro.tech.hermes.integration.shame.Unreliable;
 import pl.allegro.tech.hermes.test.helper.avro.AvroUserSchemaLoader;
 import pl.allegro.tech.hermes.test.helper.builder.TopicBuilder;
 
 import javax.ws.rs.core.Response;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -34,6 +37,71 @@ import static pl.allegro.tech.hermes.test.helper.builder.TopicBuilder.topic;
 public class TopicManagementTest extends IntegrationTest {
 
     private static final String SCHEMA = AvroUserSchemaLoader.load().toString();
+
+    @Test
+    public void shouldEmmitAuditEventWhenTopicCreated() {
+        //given
+        operations.createGroup("testGroupName");
+        Topic topic = topic("testGroupName", "testTopicName").build();
+
+        //when
+        management.topic().create(topicWithSchema(topic));
+
+        //then
+        assertThat(
+                auditEvents.getLastRequest().getBodyAsString()
+        ).contains("CREATED", "Topic", topic.getQualifiedName());
+    }
+
+    @Test
+    public void shouldEmmitAuditEventWhenTopicRemoved() {
+        //given
+        operations.createGroup("anotherTestGroupName");
+        Topic topic = topic("anotherTestGroupName", "anotherTestTopicName").build();
+        operations.createTopic(topicWithSchema(topic));
+
+        //when
+        management.topic().remove(topic.getQualifiedName());
+
+        //then
+        assertThat(
+                auditEvents.getLastRequest().getBodyAsString()
+        ).contains("REMOVED", topic.getQualifiedName());
+    }
+
+    @Test
+    public void shouldEmmitAuditEventWhenTopicUpdated() {
+        //given
+        operations.createGroup("someTestGroupName");
+        Topic topic = topic("someTestGroupName", "someTestTopicName").withMaxMessageSize(1024).build();
+        operations.createTopic(topicWithSchema(topic));
+        PatchData patchData = PatchData.from(ImmutableMap.of("maxMessageSize", 2048));
+
+        //when
+        management.topic().update(topic.getQualifiedName(), patchData);
+
+        //then
+        assertThat(
+                auditEvents.getLastRequest().getBodyAsString()
+        ).contains("UPDATED", "someTestTopicName");
+    }
+
+    @Test
+    public void shouldEmmitAuditEventBeforeUpdateWhenWrongPatchDataKeyProvided() {
+        //given
+        operations.createGroup("testGroupName");
+        Topic topic = topic("testGroupName", "testTopicName").withMaxMessageSize(1024).build();
+        operations.createTopic(topicWithSchema(topic));
+        PatchData patchData = PatchData.from(ImmutableMap.of("someValue", 2048));
+
+        //when
+        management.topic().update("testGroupName.testTopicName", patchData);
+
+        //then
+        assertThat(
+                auditEvents.getLastRequest().getBodyAsString()
+        ).contains("BEFORE_UPDATE", "testGroupName.testTopicName", "someValue", "2048");
+    }
 
     @Test
     public void shouldCreateTopic() {
@@ -73,6 +141,22 @@ public class TopicManagementTest extends IntegrationTest {
         // then
         assertThat(response).hasStatus(Response.Status.OK);
         Assertions.assertThat(management.topic().list("removeTopicGroup", false)).isEmpty();
+    }
+
+    @Test
+    public void shouldUnblacklistTopicWhileDeleting() {
+        // given
+        operations.createGroup("removeTopicGroup");
+        operations.createTopic("removeTopicGroup", "blacklistedTopic");
+        management.blacklist().blacklistTopics(Collections.singletonList("removeTopicGroup.blacklistedTopic"));
+
+        // when
+        Response response = management.topic().remove("removeTopicGroup.blacklistedTopic");
+
+        // then
+        assertThat(response).hasStatus(Response.Status.OK);
+        Assertions.assertThat(management.topic().list("removeTopicGroup", false)).isEmpty();
+        Assertions.assertThat(management.blacklist().isTopicBlacklisted("removeTopicGroup.blacklistedTopic")).isEqualTo(BlacklistStatus.NOT_BLACKLISTED);
     }
 
     @Test
@@ -119,6 +203,24 @@ public class TopicManagementTest extends IntegrationTest {
         // then
         assertThat(response).hasStatus(Response.Status.BAD_REQUEST).hasErrorCode(ErrorCode.VALIDATION_ERROR);
         Assertions.assertThat(management.topic().list("invalidTopicGroup", false)).isEmpty();
+    }
+
+    @Test
+    public void shouldNotCreateTopicWithMissingGroup() {
+        // given no group
+
+        // when
+        TopicWithSchema topicWithSchema = topicWithSchema(topic("nonExistingGroup", "topic")
+                .withContentType(AVRO)
+                .withTrackingEnabled(false).build(), SCHEMA);
+        Response createTopicResponse = operations.createTopicResponse(topicWithSchema);
+        Response schemaResponse = operations.getSchemaResponse(topicWithSchema);
+
+        // then
+        assertThat(createTopicResponse).hasStatus(Response.Status.NOT_FOUND).hasErrorCode(ErrorCode.GROUP_NOT_EXISTS);
+
+        // and
+        assertThat(schemaResponse).hasStatus(Response.Status.NO_CONTENT);
     }
 
     @Test
@@ -325,7 +427,7 @@ public class TopicManagementTest extends IntegrationTest {
     public void shouldCreateTopicWithMaxMessageSize() {
         // given
         Topic topic = TopicBuilder.topic("messageSize", "topic").withMaxMessageSize(2048).build();
-        assertThat(management.group().create(new Group(topic.getName().getGroupName(), "a"))).hasStatus(CREATED);
+        assertThat(management.group().create(new Group(topic.getName().getGroupName()))).hasStatus(CREATED);
 
         // when
         Response response = management.topic().create(topicWithSchema(topic));
@@ -353,7 +455,7 @@ public class TopicManagementTest extends IntegrationTest {
     public void shouldCreateTopicWithRestrictedSubscribing() {
         // given
         Topic topic = TopicBuilder.topic("restricted", "topic").withSubscribingRestricted().build();
-        assertThat(management.group().create(new Group(topic.getName().getGroupName(), "topic"))).hasStatus(CREATED);
+        assertThat(management.group().create(new Group(topic.getName().getGroupName()))).hasStatus(CREATED);
 
         // when
         Response response = management.topic().create(topicWithSchema(topic));

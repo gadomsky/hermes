@@ -25,7 +25,6 @@ import pl.allegro.tech.hermes.schema.SchemaRepository;
 import pl.allegro.tech.hermes.schema.SchemaVersion;
 import tech.allegro.schema.json2avro.converter.AvroConversionException;
 
-import javax.inject.Inject;
 import java.time.Clock;
 import java.util.Map;
 import java.util.Optional;
@@ -40,16 +39,15 @@ public class MessageFactory {
     private static final Logger logger = LoggerFactory.getLogger(MessageFactory.class);
 
     private final MessageValidators validators;
-    private final MessageContentTypeEnforcer enforcer;
+    private final AvroEnforcer enforcer;
     private final SchemaRepository schemaRepository;
     private final HeadersPropagator headersPropagator;
     private final MessageContentWrapper messageContentWrapper;
     private final Clock clock;
     private final boolean schemaIdHeaderEnabled;
 
-    @Inject
     public MessageFactory(MessageValidators validators,
-                          MessageContentTypeEnforcer enforcer,
+                          AvroEnforcer enforcer,
                           SchemaRepository schemaRepository,
                           HeadersPropagator headersPropagator,
                           MessageContentWrapper messageContentWrapper,

@@ -66,10 +66,10 @@ public class QueryEndpointTest extends IntegrationTest {
     @Test(dataProvider = "groupData")
     public void shouldQueryGroup(String query, List<Integer> positions) {
         // given
-        Group group1 = new Group("testGroup1", "Support3");
-        Group group2 = new Group("testNot1", "Support3");
-        Group group3 = new Group("testGroup2", "Support4");
-        Group group4 = new Group("testGroup3", "Support2");
+        Group group1 = new Group("testGroup1");
+        Group group2 = new Group("testNot1");
+        Group group3 = new Group("testGroup2");
+        Group group4 = new Group("testGroup3");
 
         List<Group> groups = asList(group1, group2, group3, group4);
 
@@ -158,7 +158,7 @@ public class QueryEndpointTest extends IntegrationTest {
     @Test
     public void shouldSkipEntitiesNotContainingQueriedField() {
         // given
-        management.group().create(new Group("group", "owner"));
+        management.group().create(new Group("group"));
 
         // when
         List<Group> found = management.query().queryGroups("{\"query\": {\"missingField\": \"xxx\"}}");
@@ -170,7 +170,7 @@ public class QueryEndpointTest extends IntegrationTest {
     @Test
     public void shouldSkipEntitiesNotContainingQueriedNestedField() {
         // given
-        management.group().create(new Group("group", "owner"));
+        management.group().create(new Group("group"));
 
         // when
         List<Group> found = management.query().queryGroups("{\"query\": {\"missing.nested.field\": \"xxx\"}}");
@@ -218,8 +218,8 @@ public class QueryEndpointTest extends IntegrationTest {
         Topic topic1 = operations.buildTopic("subscriptionsMetricsTestGroup1", "topic");
         Topic topic2 = operations.buildTopic("subscriptionsMetricsTestGroup2", "topic");
 
-        Subscription subscription1 = operations.createSubscription(topic1, "subscription1", HTTP_ENDPOINT_URL);
-        Subscription subscription2 = operations.createSubscription(topic2, "subscription2", HTTP_ENDPOINT_URL);
+        Subscription subscription1 = operations.createSubscription(topic1, "subscription1", remoteService.getUrl());
+        Subscription subscription2 = operations.createSubscription(topic2, "subscription2", remoteService.getUrl());
 
         String queryGetAllSubscriptionsMetrics = "{\"query\": {}}";
         String queryGetSubscriptionsMetricsWithPositiveThroughput = "{\"query\": {\"throughput\": {\"gt\": 0}}}";
@@ -264,7 +264,7 @@ public class QueryEndpointTest extends IntegrationTest {
     public void shouldHandleUnavailableSubscriptionsMetrics() {
         // given
         Topic topic = operations.buildTopic("unavailableMetricsGroup", "topic");
-        Subscription subscription = operations.createSubscription(topic, "subscription", HTTP_ENDPOINT_URL);
+        Subscription subscription = operations.createSubscription(topic, "subscription", remoteService.getUrl());
 
         String queryGetAllSubscriptionsMetrics = "{\"query\": {}}";
         String queryGetSubscriptionsMetricsWithPositiveRate = "{\"query\": {\"rate\": {\"gt\": 0}}}";

@@ -14,16 +14,18 @@ import pl.allegro.tech.hermes.test.helper.message.TestMessage;
 
 import javax.ws.rs.NotFoundException;
 import javax.ws.rs.core.Response;
-import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static com.googlecode.catchexception.CatchException.catchException;
 import static java.util.stream.IntStream.range;
+import static javax.ws.rs.core.Response.Status.ACCEPTED;
 import static javax.ws.rs.core.Response.Status.CREATED;
 import static net.javacrumbs.jsonunit.fluent.JsonFluentAssert.assertThatJson;
 import static org.assertj.core.api.Assertions.assertThat;
 import static pl.allegro.tech.hermes.api.ContentType.AVRO;
+import static pl.allegro.tech.hermes.api.Topic.Ack.ALL;
 import static pl.allegro.tech.hermes.api.TopicWithSchema.topicWithSchema;
 import static pl.allegro.tech.hermes.test.helper.builder.TopicBuilder.randomTopic;
 
@@ -43,8 +45,8 @@ public class KafkaSingleMessageReaderTest extends IntegrationTest {
     @Test
     public void shouldFetchSingleMessageByTopicPartitionAndOffset() {
         // given
-        Topic topic = operations.buildTopic(randomTopic("kafkaPreviewTestGroup", "topic").build());
-        operations.createSubscription(topic, "subscription", HTTP_ENDPOINT_URL);
+        Topic topic = operations.buildTopic(randomTopic("kafkaPreviewTestGroup", "topic").withAck(ALL).build());
+        operations.createSubscription(topic, "subscription", remoteService.getUrl());
 
         List<String> messages = new ArrayList<String>() {{ range(0, 3).forEach(i -> add(TestMessage.random().body())); }};
 
@@ -63,14 +65,16 @@ public class KafkaSingleMessageReaderTest extends IntegrationTest {
     }
 
     @Test
-    public void shouldFetchSingleAvroMessage() throws IOException {
+    public void shouldFetchSingleAvroMessage() {
         // given
-        Topic topic = randomTopic("avro", "fetch").withContentType(AVRO).build();
+        Topic topic = randomTopic("avro", "fetch").withContentType(AVRO).withAck(ALL).build();
         TopicWithSchema topicWithSchema = topicWithSchema(topic, avroUser.getSchemaAsString());
         operations.buildTopicWithSchema(topicWithSchema);
+        operations.createSubscription(topic, "subscription", remoteService.getUrl());
 
         Response response = publisher.publish(topic.getQualifiedName(), avroUser.asBytes());
-        HermesAssertions.assertThat(response).hasStatus(CREATED);
+        HermesAssertions.assertThat(response).hasStatusFamily(Response.Status.Family.SUCCESSFUL);
+        remoteService.waitUntilReceived();
 
         // when
         List<String> previews = fetchPreviewsFromAllPartitions(topic.getQualifiedName(), 10, false);
@@ -83,17 +87,20 @@ public class KafkaSingleMessageReaderTest extends IntegrationTest {
     }
 
     @Test
-    public void shouldFetchSingleAvroMessageWithSchemaAwareSerialization() throws IOException {
+    public void shouldFetchSingleAvroMessageWithSchemaAwareSerialization() {
         // given
         Topic topic = randomTopic("avro", "fetchSchemaAwareSerialization")
                 .withSchemaIdAwareSerialization()
                 .withContentType(AVRO)
+                .withAck(ALL)
                 .build();
         TopicWithSchema topicWithSchema = topicWithSchema(topic, avroUser.getSchemaAsString());
         operations.buildTopicWithSchema(topicWithSchema);
+        operations.createSubscription(topic, "subscription", remoteService.getUrl());
 
         Response response = publisher.publish(topic.getQualifiedName(), avroUser.asBytes());
-        HermesAssertions.assertThat(response).hasStatus(CREATED);
+        HermesAssertions.assertThat(response).hasStatusFamily(Response.Status.Family.SUCCESSFUL);
+        remoteService.waitUntilReceived();
 
         // when
         List<String> previews = fetchPreviewsFromAllPartitions(topic.getQualifiedName(), 10, false);
@@ -108,8 +115,8 @@ public class KafkaSingleMessageReaderTest extends IntegrationTest {
     @Test
     public void shouldReturnNotFoundErrorForNonExistingOffset() {
         // given
-        Topic topic = operations.buildTopic(randomTopic("kafkaPreviewTestGroup", "offsetTestTopic").build());
-        operations.createSubscription(topic, "subscription", HTTP_ENDPOINT_URL);
+        Topic topic = operations.buildTopic(randomTopic("kafkaPreviewTestGroup", "offsetTestTopic").withAck(ALL).build());
+        operations.createSubscription(topic, "subscription", remoteService.getUrl());
         List<String> messages = new ArrayList<String>() {{ range(0, 3).forEach(i -> add(TestMessage.random().body())); }};
 
         remoteService.expectMessages(messages);
@@ -127,7 +134,7 @@ public class KafkaSingleMessageReaderTest extends IntegrationTest {
     @Test
     public void shouldReturnNotFoundErrorForNonExistingPartition() {
         // given
-        Topic topic = operations.buildTopic(randomTopic("kafkaPreviewTestGroup", "partitionTestTopic").build());
+        Topic topic = operations.buildTopic(randomTopic("kafkaPreviewTestGroup", "partitionTestTopic").withAck(ALL).build());
 
         // when
         catchException(management.topic()).preview(topic.getQualifiedName(), PRIMARY_KAFKA_CLUSTER_NAME, 10, 0L);

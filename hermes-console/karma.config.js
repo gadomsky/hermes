@@ -9,7 +9,8 @@ module.exports = function(config) {
              'karma-requirejs',
              'karma-coverage',
              'karma-junit-reporter',
-             'karma-phantomjs-launcher',
+             'karma-chrome-launcher',
+             'karma-ng-html2js-preprocessor'
              ],
 
     // base path that will be used to resolve all patterns (eg. files, exclude)
@@ -34,10 +35,11 @@ module.exports = function(config) {
       "static/components/angularjs-toaster/toaster.js",
       "static/components/json-formatter/dist/json-formatter.min.js.js",
       "static/components/hello/dist/hello.min.js",
-
-      "node_modules/angular-mocks/angular-mocks.js",
-
+      "static/components/jquery/dist/jquery.min.js",
+      "static/js/console/owner/OwnerRepository.js",
       "static/js/**/*.js",
+      "static/partials/**/*.html",
+      "node_modules/angular-mocks/angular-mocks.js",
 	  "test/unit/**/*.js"
     ],
 
@@ -48,6 +50,7 @@ module.exports = function(config) {
 
     // list of files to exclude
     exclude: [
+        "static/js/bootstrap.js",
     ],
 
 
@@ -57,15 +60,20 @@ module.exports = function(config) {
           // source files, that you wanna generate coverage for
           // do not include tests or libraries
           // (these files will be instrumented by Istanbul)
-          'js/**/*.js': ['coverage']
+          'js/**/*.js': ['coverage'],
+          'static/partials/**/*.html': ['ng-html2js']
       },
 
-      // optionally, configure the reporter
+      ngHtml2JsPreprocessor: {
+          stripPrefix: 'static/',
+          moduleName: 'templates'
+      },
+
+    // optionally, configure the reporter
       coverageReporter: {
           type : 'html',
           dir : 'coverage/'
       },
-
 
     // test results reporter to use
     // possible values: 'dots', 'progress'
@@ -92,7 +100,7 @@ module.exports = function(config) {
 
     // start these browsers
     // available browser launchers: https://npmjs.org/browse/keyword/karma-launcher
-    browsers: ['PhantomJS'],
+    browsers: ['ChromeHeadless'],
 
 
     // Continuous Integration mode

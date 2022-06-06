@@ -2,7 +2,9 @@ package pl.allegro.tech.hermes.common.config;
 
 import com.google.common.io.Files;
 import pl.allegro.tech.hermes.api.Topic;
-import pl.allegro.tech.hermes.common.util.InetAddressHostnameResolver;
+import pl.allegro.tech.hermes.common.util.InetAddressInstanceIdResolver;
+
+import java.util.Arrays;
 
 import static java.lang.Math.abs;
 import static java.util.UUID.randomUUID;
@@ -28,7 +30,7 @@ public enum Configs {
     ZOOKEEPER_TASK_PROCESSING_THREAD_POOL_SIZE("zookeeper.cache.processing.thread.pool.size", 5),
 
     ENVIRONMENT_NAME("environment.name", "dev"),
-    HOSTNAME("hostname", new InetAddressHostnameResolver().resolve()),
+    HOSTNAME("hostname", new InetAddressInstanceIdResolver().resolve()),
 
     KAFKA_CLUSTER_NAME("kafka.cluster.name", "primary-dc"),
     KAFKA_BROKER_LIST("kafka.broker.list", "localhost:9092"),
@@ -85,6 +87,7 @@ public enum Configs {
     KAFKA_PRODUCER_MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION("kafka.producer.max.in.flight.requests.per.connection", 5),
     KAFKA_PRODUCER_REPORT_NODE_METRICS("kafka.producer.report.node.metrics", false),
     KAFKA_STREAM_COUNT("kafka.stream.count", 1),
+    KAFKA_ADMIN_REQUEST_TIMEOUT_MS("kafka.admin.request.timeout.ms", 5 * 60 * 1000),
 
     KAFKA_AUTHORIZATION_ENABLED("kafka.authorization.enabled", false),
     KAFKA_AUTHORIZATION_MECHANISM("kafka.authorization.mechanism", "PLAIN"),
@@ -175,8 +178,8 @@ public enum Configs {
     FRONTEND_MESSAGE_PREVIEW_SIZE("frontend.message.preview.size", 3),
     FRONTEND_MESSAGE_PREVIEW_LOG_PERSIST_PERIOD("frontend.message.preview.log.persist.period.seconds", 30),
 
-    FRONTEND_STARTUP_WAIT_KAFKA_ENABLED("frontend.startup.wait.kafka.enabled", false),
-    FRONTEND_STARTUP_WAIT_KAFKA_INTERVAL("frontend.startup.wait.kafka.interval", 5000L),
+    FRONTEND_READINESS_CHECK_ENABLED("frontend.readiness.check.enabled", false),
+    FRONTEND_READINESS_CHECK_INTERVAL_SECONDS("frontend.readiness.check.interval.seconds", 1),
 
     FRONTEND_STARTUP_TOPIC_METADATA_LOADING_ENABLED("frontend.startup.topic.metadata.loading.enabled", false),
     FRONTEND_STARTUP_TOPIC_METADATA_LOADING_RETRY_INTERVAL("frontend.startup.topic.metadata.loading.retry.interval", 1_000L),
@@ -241,10 +244,10 @@ public enum Configs {
     CONSUMER_RATE_LIMITER_REPORTING_THREAD_POOL_MONITORING("consumer.rate.limiter.reporting.thread.pool.monitoring", false),
     CONSUMER_RATE_LIMITER_HEARTBEAT_MODE_DELAY("consumer.rate.limiter.hearbeat.mode.delay", 60),
     CONSUMER_RATE_LIMITER_SLOW_MODE_DELAY("consumer.rate.limiter.slow.mode.delay", 1),
+    CONSUMER_FILTERING_RATE_LIMITER_ENABLED("consumer.filtering.rate.limiter.enabled", false),
     CONSUMER_RATE_CONVERGENCE_FACTOR("consumer.rate.convergence.factor", 0.2),
     CONSUMER_RATE_FAILURES_NOCHANGE_TOLERANCE_RATIO("consumer.rate.failures.nochange.tolerance.ratio", 0.05),
     CONSUMER_RATE_FAILURES_SPEEDUP_TOLERANCE_RATIO("consumer.rate.failures.speedup.tolerance.ratio", 0.01),
-    CONSUMER_MAXRATE_REGISTRY_TYPE("consumer.maxrate.registry.type", "hierarchical"),
     CONSUMER_MAXRATE_REGISTRY_BINARY_ENCODER_MAX_RATE_BUFFER_SIZE_BYTES("consumer.maxrate.registry.binary.encoder.max.rate.buffer.size.bytes", 100_000),
     CONSUMER_MAXRATE_REGISTRY_BINARY_ENCODER_HISTORY_BUFFER_SIZE_BYTES("consumer.maxrate.registry.binary.encoder.history.buffer.size.bytes", 100_000),
     CONSUMER_MAXRATE_BALANCE_INTERVAL_SECONDS("consumer.maxrate.balance.interval.seconds", 30),
@@ -256,14 +259,13 @@ public enum Configs {
     CONSUMER_MAXRATE_MIN_SIGNIFICANT_UPDATE_PERCENT("consumer.maxrate.min.significant.update.percent", 9.0),
 
     CONSUMER_HEALTH_CHECK_PORT("consumer.status.health.port", 8000),
-    CONSUMER_WORKLOAD_REGISTRY_TYPE("consumer.workload.registry.type", "hierarchical"),
     CONSUMER_WORKLOAD_REGISTRY_BINARY_ENCODER_ASSIGNMENTS_BUFFER_SIZE_BYTES("consumer.workload.registry.binary.encoder.assignments.buffer.size.bytes", 100_000),
     CONSUMER_WORKLOAD_REBALANCE_INTERVAL("consumer.workload.rebalance.interval.seconds", 30),
     CONSUMER_WORKLOAD_CONSUMERS_PER_SUBSCRIPTION("consumer.workload.consumers.per.subscription", 2),
     CONSUMER_WORKLOAD_MAX_SUBSCRIPTIONS_PER_CONSUMER("consumer.workload.max.subscriptions.per.consumer", 200),
     CONSUMER_WORKLOAD_ASSIGNMENT_PROCESSING_THREAD_POOL_SIZE("consumer.workload.assignment.processing.thread.pool.size", 5),
     CONSUMER_WORKLOAD_NODE_ID("consumer.workload.node.id",
-            new InetAddressHostnameResolver().resolve().replaceAll("\\.", "_") + "$" + abs(randomUUID().getMostSignificantBits())),
+            new InetAddressInstanceIdResolver().resolve().replaceAll("\\.", "_") + "$" + abs(randomUUID().getMostSignificantBits())),
     CONSUMER_WORKLOAD_MONITOR_SCAN_INTERVAL("consumer.workload.monitor.scan.interval.seconds", 120),
     CONSUMER_WORKLOAD_AUTO_REBALANCE("consumer.workload.rebalance.auto", true),
     CONSUMER_WORKLOAD_DEAD_AFTER_SECONDS("consumer.workload.dead.after.seconds", 120),
@@ -282,7 +284,7 @@ public enum Configs {
 
     CONSUMER_USE_TOPIC_MESSAGE_SIZE("consumer.use.topic.message.size", false),
 
-    CONSUMER_CLIENT_ID("consumer.clientId", new InetAddressHostnameResolver().resolve()),
+    CONSUMER_CLIENT_ID("consumer.clientId", new InetAddressInstanceIdResolver().resolve()),
 
     OAUTH_MISSING_SUBSCRIPTION_HANDLERS_CREATION_DELAY("oauth.missing.subscription.handlers.creation.delay", 10_000L),
     OAUTH_SUBSCRIPTION_TOKENS_CACHE_MAX_SIZE("oauth.subscription.tokens.cache.max.size", 1000L),
@@ -300,6 +302,8 @@ public enum Configs {
     METRICS_CONSOLE_REPORTER("metrics.console.reporter", false),
     METRICS_COUNTER_EXPIRE_AFTER_ACCESS("metrics.counter.expire.after.access", 72),
     METRICS_RESERVOIR_TYPE("metrics.reservoir.type", "exponentially_decaying"),
+
+    METRICS_DISABLED_ATTRIBUTES("metrics.disabled.attributes", "M15_RATE, M5_RATE, MEAN, MEAN_RATE, MIN, STDDEV"),
 
     GLOBAL_SHUTDOWN_HOOK_REGISTERED("global.shutdown.hook.registered", true),
 
@@ -324,6 +328,13 @@ public enum Configs {
     SCHEMA_ID_SERIALIZATION_ENABLED("schema.id.serialization.enabled", false),
     SCHEMA_VERSION_TRUNCATION_ENABLED("schema.version.truncation.enabled", false),
 
+    GOOGLE_PUBSUB_SENDER_CORE_POOL_SIZE("googlepubsub.sender.core.pool.size", 4),
+    GOOGLE_PUBSUB_SENDER_TOTAL_TIMEOUT("googlepubsub.sender.total.timeout.ms", 600_000L),
+    GOOGLE_PUBSUB_SENDER_REQUEST_BYTES_THRESHOLD("googlepubsub.sender.batching.request.bytes.threshold", 1024L),
+    GOOGLE_PUBSUB_SENDER_MESSAGE_COUNT_BATCH_SIZE("googlepubsub.sender.batching.message.count.bytes.size", 1L),
+    GOOGLE_PUBSUB_SENDER_PUBLISH_DELAY_THRESHOLD("googlepubsub.sender.batching.publish.delay.threshold.ms", 1L),
+    GOOGLE_PUBSUB_TRANSPORT_CHANNEL_PROVIDER_ADDRESS("googlepubsub.sender.transport.channel.provider.address", "integration"),
+
     UNDELIVERED_MESSAGE_LOG_PERSIST_PERIOD_MS("undelivered.message.log.persist.period.ms", 5000);
 
     private final String name;
@@ -333,6 +344,13 @@ public enum Configs {
     Configs(String name, Object defaultValue) {
         this.name = name;
         this.defaultValue = defaultValue;
+    }
+
+    public static Configs getForName(String name) {
+        return Arrays.stream(Configs.values())
+                .filter(configs -> configs.name.equals(name))
+                .reduce((a, b) -> { throw new DuplicateConfigPropertyException(name); })
+                .orElseThrow(() -> new MissingConfigPropertyException(name));
     }
 
     public String getName() {

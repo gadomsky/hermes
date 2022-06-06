@@ -12,6 +12,12 @@ import spock.lang.Shared
 import spock.lang.Specification
 import tech.allegro.schema.json2avro.converter.JsonAvroConverter
 
+import java.time.Duration
+import java.time.Instant
+
+import static java.time.Instant.now
+import static pl.allegro.tech.hermes.mock.exchange.Response.Builder.aResponse
+
 class HermesMockAvroTest extends Specification {
 
     @Shared
@@ -29,6 +35,41 @@ class HermesMockAvroTest extends Specification {
 
     def setup() {
         hermes.resetReceivedRequest()
+        hermes.resetMappings()
+    }
+
+    def "should receive an Avro message matched by pattern"() {
+        given: "define wiremock response for matching avro pattern"
+            def topicName = "my-test-avro-topic"
+            hermes.define().avroTopic(topicName,
+                    aResponse().withStatusCode(201).build(),
+                    schema,
+                    TestMessage,
+                    {it -> it.key == "test-key-pattern"})
+
+        when: "message with matching pattern is published on topic"
+            def message = new TestMessage("test-key-pattern", "test-key-value")
+            def response = publish(topicName, message)
+
+        then: "check for any single message on the topic and check for correct response"
+            hermes.expect().singleMessageOnTopic(topicName)
+            response.status == HttpStatus.SC_CREATED
+    }
+    def "should not match avro pattern"() {
+        given: "define wiremock response for matching avro pattern"
+            def topicName = "my-test-avro-topic"
+            hermes.define().avroTopic(topicName,
+                    aResponse().withStatusCode(201).build(),
+                    schema,
+                    TestMessage,
+                    {it -> it.key == "non-existing-key"})
+
+        when: "message with non-matching pattern is published on topic"
+            def message = new TestMessage("test-key-pattern", "test-key-value")
+            def response = publish(topicName, message)
+
+        then: "check for correct response status"
+            response.status == HttpStatus.SC_NOT_FOUND
     }
 
     def "should receive an Avro message"() {
@@ -43,6 +84,38 @@ class HermesMockAvroTest extends Specification {
             hermes.expect().singleMessageOnTopic(topicName)
             hermes.expect().singleAvroMessageOnTopic(topicName, schema)
             response.status == HttpStatus.SC_CREATED
+    }
+
+    def "should respond with a delay"() {
+        given:
+        def topicName = "my-test-avro-topic"
+        Duration fixedDelay = Duration.ofMillis(500)
+        hermes.define().avroTopic(topicName, aResponse().withFixedDelay(fixedDelay).build())
+        Instant start = now()
+
+        when:
+        publish(topicName)
+
+        then:
+        hermes.expect().singleMessageOnTopic(topicName)
+        hermes.expect().singleAvroMessageOnTopic(topicName, schema)
+        Duration.between(start, now()) >= fixedDelay
+    }
+
+    def "should respond for a message send with delay"() {
+        given:
+        def topicName = "my-test-avro-topic"
+        def delayInMillis = 2_000
+        hermes.define().avroTopic(topicName, aResponse().build())
+
+        when:
+        Thread.start {
+            Thread.sleep(delayInMillis)
+            publish(topicName)
+        }
+
+        then:
+        hermes.expect().singleAvroMessageOnTopic(topicName, schema)
     }
 
     def "should get all messages as avro"() {

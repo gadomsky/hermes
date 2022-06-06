@@ -1,6 +1,6 @@
 # Publishing security
 
-Hermes has a feature to restrict publishing on specific topics to particular services: [publishing permissions](/user/permissions).
+Hermes has a feature to restrict publishing on specific topics to particular services: [publishing permissions](../user/permissions.md).
 How service name is extracted from request is entirely configurable and depends on security requirements within company's ecosystem.
 
 Since Hermes uses Undertow as http server authentication implementation follows Undertow
@@ -32,13 +32,35 @@ development environment on production.
 Below you can see naive implementation of authentication via `Authorization` header used in our integration tests. 
 
 ```java 
-Predicate<HttpServerExchange> isAuthenticationRequiredPredicate = exchange -> true;
-AuthenticationMechanism basicAuth = new BasicAuthenticationMechanism("basicAuthRealm");
-builder.withAuthenticationConfiguration(new AuthenticationConfiguration(
-                                            isAuthenticationRequiredPredicate,
-                                            Arrays.asList(basicAuth),
-                                            new SingleUserAwareIdentityManager("John", "12345")                                          
-                                        ));
+@Configuration
+@PropertySource("classpath:application-auth.properties")
+public class AuthConfiguration {
+
+    @Value("${auth.username}")
+    private String username;
+
+    @Value("${auth.password}")
+    private String password;
+
+    @Bean
+    @Profile("authRequired")
+    public AuthenticationConfiguration requiredAuthenticationConfiguration() {
+        return getAuthConfig(true);
+    }
+
+    @Bean
+    @Profile("authNonRequired")
+    public AuthenticationConfiguration notRequiredAuthenticationConfiguration() {
+        return getAuthConfig(false);
+    }
+
+    private AuthenticationConfiguration getAuthConfig (boolean isAuthenticationRequired) {
+        return new AuthenticationConfiguration(
+                exchange -> isAuthenticationRequired,
+                Lists.newArrayList(new BasicAuthenticationMechanism("basicAuthRealm")),
+                new SingleUserAwareIdentityManager(username, password));
+    }
+}
 ```
 
 ```java

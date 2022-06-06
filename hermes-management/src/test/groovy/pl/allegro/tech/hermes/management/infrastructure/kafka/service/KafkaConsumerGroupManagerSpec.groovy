@@ -7,7 +7,7 @@ import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.clients.producer.RecordMetadata
 import org.apache.kafka.common.TopicPartition
 import org.junit.Rule
-import org.springframework.boot.test.rule.OutputCapture
+import org.springframework.boot.test.system.OutputCaptureRule
 import org.testcontainers.containers.KafkaContainer
 import org.testcontainers.containers.wait.strategy.Wait
 import org.testcontainers.spock.Testcontainers
@@ -35,7 +35,7 @@ import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_
 class KafkaConsumerGroupManagerSpec extends Specification {
 
     @Rule
-    OutputCapture output = new OutputCapture()
+    OutputCaptureRule output = new OutputCaptureRule()
 
     @Shared
     KafkaContainer kafkaContainer = new KafkaContainer()
@@ -167,7 +167,7 @@ class KafkaConsumerGroupManagerSpec extends Specification {
 
     private def createTestSubscription(Topic topic, String subscriptionName) {
         Subscription.create(topic.getQualifiedName(), subscriptionName, null, Subscription.State.PENDING, "test", [:], false, null, null,
-                null, null, ContentType.JSON, DeliveryType.SERIAL, [], SubscriptionMode.ANYCAST, [], null, null, false, false
+                null, ContentType.JSON, DeliveryType.SERIAL, [], SubscriptionMode.ANYCAST, [], null, null, false, false
         )
     }
 

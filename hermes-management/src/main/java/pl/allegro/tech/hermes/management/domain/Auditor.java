@@ -25,7 +25,11 @@ public interface Auditor {
         objectCreated(username, (Object) createdObject.anonymize());
     }
 
-    default void objectRemoved(String username, String removedObjectType, String removedObjectName) {
+    default void objectRemoved(String username, Object removedObject) {
+    }
+
+    default void objectRemoved(String username, Anonymizable removedObject) {
+        objectRemoved(username, (Object) removedObject.anonymize());
     }
 
     default void objectUpdated(String username, Object oldObject, Object newObject) {
@@ -33,14 +37,5 @@ public interface Auditor {
 
     default void objectUpdated(String username, Anonymizable oldObject, Anonymizable newObject) {
         objectUpdated(username, (Object) oldObject.anonymize(), (Object) newObject.anonymize());
-    }
-
-    static Auditor noOpAuditor() {
-        return new NoOpAuditor();
-    }
-
-    class NoOpAuditor implements Auditor {
-        private NoOpAuditor() {
-        }
     }
 }

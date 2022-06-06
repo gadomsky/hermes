@@ -3,7 +3,7 @@ package pl.allegro.tech.hermes.consumers.supervisor;
 import pl.allegro.tech.hermes.api.Subscription;
 import pl.allegro.tech.hermes.api.Topic;
 import pl.allegro.tech.hermes.common.config.ConfigFactory;
-import pl.allegro.tech.hermes.common.message.wrapper.MessageContentWrapper;
+import pl.allegro.tech.hermes.common.message.wrapper.CompositeMessageContentWrapper;
 import pl.allegro.tech.hermes.common.metric.HermesMetrics;
 import pl.allegro.tech.hermes.consumers.consumer.BatchConsumer;
 import pl.allegro.tech.hermes.consumers.consumer.Consumer;
@@ -21,7 +21,6 @@ import pl.allegro.tech.hermes.consumers.consumer.sender.MessageBatchSenderFactor
 import pl.allegro.tech.hermes.domain.topic.TopicRepository;
 import pl.allegro.tech.hermes.tracker.consumers.Trackers;
 
-import javax.inject.Inject;
 import java.time.Clock;
 
 public class ConsumerFactory {
@@ -37,12 +36,11 @@ public class ConsumerFactory {
     private final TopicRepository topicRepository;
     private final MessageConverterResolver messageConverterResolver;
     private final MessageBatchFactory batchFactory;
-    private final MessageContentWrapper messageContentWrapper;
+    private final CompositeMessageContentWrapper compositeMessageContentWrapper;
     private final MessageBatchSenderFactory batchSenderFactory;
     private final ConsumerAuthorizationHandler consumerAuthorizationHandler;
     private final Clock clock;
 
-    @Inject
     public ConsumerFactory(ReceiverFactory messageReceiverFactory,
                            HermesMetrics hermesMetrics,
                            ConfigFactory configFactory,
@@ -54,7 +52,7 @@ public class ConsumerFactory {
                            TopicRepository topicRepository,
                            MessageConverterResolver messageConverterResolver,
                            MessageBatchFactory byteBufferMessageBatchFactory,
-                           MessageContentWrapper messageContentWrapper,
+                           CompositeMessageContentWrapper compositeMessageContentWrapper,
                            MessageBatchSenderFactory batchSenderFactory,
                            ConsumerAuthorizationHandler consumerAuthorizationHandler,
                            Clock clock) {
@@ -70,7 +68,7 @@ public class ConsumerFactory {
         this.topicRepository = topicRepository;
         this.messageConverterResolver = messageConverterResolver;
         this.batchFactory = byteBufferMessageBatchFactory;
-        this.messageContentWrapper = messageContentWrapper;
+        this.compositeMessageContentWrapper = compositeMessageContentWrapper;
         this.batchSenderFactory = batchSenderFactory;
         this.consumerAuthorizationHandler = consumerAuthorizationHandler;
         this.clock = clock;
@@ -84,7 +82,7 @@ public class ConsumerFactory {
                     batchFactory,
                     offsetQueue,
                     messageConverterResolver,
-                    messageContentWrapper,
+                    compositeMessageContentWrapper,
                     hermesMetrics,
                     trackers,
                     subscription,

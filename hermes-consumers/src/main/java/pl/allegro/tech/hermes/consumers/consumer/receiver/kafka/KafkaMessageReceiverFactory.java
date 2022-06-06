@@ -9,7 +9,6 @@ import pl.allegro.tech.hermes.common.kafka.ConsumerGroupId;
 import pl.allegro.tech.hermes.common.kafka.KafkaNamesMapper;
 import pl.allegro.tech.hermes.common.metric.HermesMetrics;
 import pl.allegro.tech.hermes.consumers.consumer.filtering.FilteredMessageHandler;
-import pl.allegro.tech.hermes.domain.filtering.chain.FilterChainFactory;
 import pl.allegro.tech.hermes.consumers.consumer.idleTime.ExponentiallyGrowingIdleTimeCalculator;
 import pl.allegro.tech.hermes.consumers.consumer.idleTime.IdleTimeCalculator;
 import pl.allegro.tech.hermes.consumers.consumer.offset.ConsumerPartitionAssignmentState;
@@ -18,10 +17,9 @@ import pl.allegro.tech.hermes.consumers.consumer.rate.ConsumerRateLimiter;
 import pl.allegro.tech.hermes.consumers.consumer.receiver.MessageReceiver;
 import pl.allegro.tech.hermes.consumers.consumer.receiver.ReceiverFactory;
 import pl.allegro.tech.hermes.consumers.consumer.receiver.ThrottlingMessageReceiver;
+import pl.allegro.tech.hermes.domain.filtering.chain.FilterChainFactory;
 import pl.allegro.tech.hermes.tracker.consumers.Trackers;
 
-import javax.inject.Inject;
-import java.time.Clock;
 import java.util.Properties;
 
 import static org.apache.kafka.clients.CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
@@ -74,30 +72,26 @@ import static org.apache.kafka.common.config.SslConfigs.SSL_ENDPOINT_IDENTIFICAT
 public class KafkaMessageReceiverFactory implements ReceiverFactory {
 
     private final ConfigFactory configs;
-    private final MessageContentReaderFactory messageContentReaderFactory;
+    private final KafkaConsumerRecordToMessageConverterFactory messageConverterFactory;
     private final HermesMetrics hermesMetrics;
-    private OffsetQueue offsetQueue;
-    private final Clock clock;
+    private final OffsetQueue offsetQueue;
     private final KafkaNamesMapper kafkaNamesMapper;
     private final FilterChainFactory filterChainFactory;
     private final Trackers trackers;
     private final ConsumerPartitionAssignmentState consumerPartitionAssignmentState;
 
-    @Inject
     public KafkaMessageReceiverFactory(ConfigFactory configs,
-                                       MessageContentReaderFactory messageContentReaderFactory,
+                                       KafkaConsumerRecordToMessageConverterFactory messageConverterFactory,
                                        HermesMetrics hermesMetrics,
                                        OffsetQueue offsetQueue,
-                                       Clock clock,
                                        KafkaNamesMapper kafkaNamesMapper,
                                        FilterChainFactory filterChainFactory,
                                        Trackers trackers,
                                        ConsumerPartitionAssignmentState consumerPartitionAssignmentState) {
         this.configs = configs;
-        this.messageContentReaderFactory = messageContentReaderFactory;
+        this.messageConverterFactory = messageConverterFactory;
         this.hermesMetrics = hermesMetrics;
         this.offsetQueue = offsetQueue;
-        this.clock = clock;
         this.kafkaNamesMapper = kafkaNamesMapper;
         this.filterChainFactory = filterChainFactory;
         this.trackers = trackers;
@@ -111,12 +105,11 @@ public class KafkaMessageReceiverFactory implements ReceiverFactory {
 
         MessageReceiver receiver = new KafkaSingleThreadedMessageReceiver(
                 createKafkaConsumer(topic, subscription),
-                messageContentReaderFactory.provide(topic),
+                messageConverterFactory,
                 hermesMetrics,
                 kafkaNamesMapper,
                 topic,
                 subscription,
-                clock,
                 configs.getIntProperty(Configs.CONSUMER_RECEIVER_POOL_TIMEOUT),
                 configs.getIntProperty(Configs.CONSUMER_RECEIVER_READ_QUEUE_CAPACITY),
                 consumerPartitionAssignmentState);
@@ -130,10 +123,11 @@ public class KafkaMessageReceiverFactory implements ReceiverFactory {
             receiver = new ThrottlingMessageReceiver(receiver, idleTimeCalculator, subscription, hermesMetrics);
         }
 
+        boolean filteringRateLimitEnabled = configs.getBooleanProperty(Configs.CONSUMER_FILTERING_RATE_LIMITER_ENABLED);
         if (configs.getBooleanProperty(Configs.CONSUMER_FILTERING_ENABLED)) {
             FilteredMessageHandler filteredMessageHandler = new FilteredMessageHandler(
                     offsetQueue,
-                    consumerRateLimiter,
+                    filteringRateLimitEnabled ? consumerRateLimiter : null,
                     trackers,
                     hermesMetrics);
             receiver = new FilteringMessageReceiver(receiver, filteredMessageHandler, filterChainFactory, subscription);

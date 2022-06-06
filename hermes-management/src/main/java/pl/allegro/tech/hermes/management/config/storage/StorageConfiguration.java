@@ -3,9 +3,11 @@ package pl.allegro.tech.hermes.management.config.storage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.curator.framework.CuratorFramework;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import pl.allegro.tech.hermes.domain.CredentialsRepository;
 import pl.allegro.tech.hermes.domain.group.GroupRepository;
 import pl.allegro.tech.hermes.domain.oauth.OAuthProviderRepository;
@@ -23,12 +25,16 @@ import pl.allegro.tech.hermes.infrastructure.zookeeper.ZookeeperTopicRepository;
 import pl.allegro.tech.hermes.infrastructure.zookeeper.ZookeeperWorkloadConstraintsRepository;
 import pl.allegro.tech.hermes.management.domain.blacklist.TopicBlacklistRepository;
 import pl.allegro.tech.hermes.management.domain.dc.MultiDatacenterRepositoryCommandExecutor;
+import pl.allegro.tech.hermes.management.domain.dc.MultiDatacenterRepositoryQueryExecutor;
+import pl.allegro.tech.hermes.management.domain.mode.ModeService;
+import pl.allegro.tech.hermes.management.domain.retransmit.OfflineRetransmissionRepository;
 import pl.allegro.tech.hermes.management.infrastructure.blacklist.ZookeeperTopicBlacklistRepository;
 import pl.allegro.tech.hermes.management.infrastructure.dc.DatacenterNameProvider;
 import pl.allegro.tech.hermes.management.infrastructure.dc.DcNameSource;
 import pl.allegro.tech.hermes.management.infrastructure.dc.DefaultDatacenterNameProvider;
 import pl.allegro.tech.hermes.management.infrastructure.dc.EnvironmentVariableDatacenterNameProvider;
 import pl.allegro.tech.hermes.management.infrastructure.metrics.SummedSharedCounter;
+import pl.allegro.tech.hermes.management.infrastructure.retransmit.ZookeeperOfflineRetransmissionRepository;
 import pl.allegro.tech.hermes.management.infrastructure.zookeeper.ZookeeperClient;
 import pl.allegro.tech.hermes.management.infrastructure.zookeeper.ZookeeperClientManager;
 import pl.allegro.tech.hermes.management.infrastructure.zookeeper.ZookeeperRepositoryManager;
@@ -81,9 +87,20 @@ public class StorageConfiguration {
 
     @Bean
     MultiDatacenterRepositoryCommandExecutor multiDcRepositoryCommandExecutor(
+            ZookeeperGroupRepositoryFactory zookeeperGroupRepositoryFactory,
+            ModeService modeService
+    ) {
+        return new MultiDatacenterRepositoryCommandExecutor(
+                repositoryManager(zookeeperGroupRepositoryFactory),
+                storageClustersProperties.isTransactional(),
+                modeService
+        );
+    }
+
+    @Bean
+    MultiDatacenterRepositoryQueryExecutor multiDcRepositoryQueryExecutor(
             ZookeeperGroupRepositoryFactory zookeeperGroupRepositoryFactory) {
-        return new MultiDatacenterRepositoryCommandExecutor(repositoryManager(zookeeperGroupRepositoryFactory),
-                storageClustersProperties.isTransactional());
+        return new MultiDatacenterRepositoryQueryExecutor(repositoryManager(zookeeperGroupRepositoryFactory));
     }
 
     @Bean
@@ -143,6 +160,14 @@ public class StorageConfiguration {
     WorkloadConstraintsRepository workloadConstraintsRepository() {
         ZookeeperClient localClient = clientManager().getLocalClient();
         return new ZookeeperWorkloadConstraintsRepository(localClient.getCuratorFramework(), objectMapper, zookeeperPaths());
+    }
+
+    @Bean
+    @Primary
+    @Qualifier("zookeeperOfflineRetransmissionRepository")
+    OfflineRetransmissionRepository zookeeperOfflineRetransmissionRepository() {
+        ZookeeperClient localClient = clientManager().getLocalClient();
+        return new ZookeeperOfflineRetransmissionRepository(localClient.getCuratorFramework(), objectMapper, zookeeperPaths());
     }
 
     @PostConstruct

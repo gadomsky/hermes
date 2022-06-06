@@ -24,8 +24,8 @@ public class Producers {
     private final Producer<byte[], byte[]> leaderConfirms;
     private final Producer<byte[], byte[]> everyoneConfirms;
 
-    private boolean reportNodeMetrics;
-    private AtomicBoolean nodeMetricsRegistered = new AtomicBoolean(false);
+    private final boolean reportNodeMetrics;
+    private final AtomicBoolean nodeMetricsRegistered = new AtomicBoolean(false);
 
     public Producers(Producer<byte[], byte[]> leaderConfirms,
                      Producer<byte[], byte[]> everyoneConfirms,
@@ -46,6 +46,8 @@ public class Producers {
         registerAvailableBytesGauge(everyoneConfirms, metrics, Gauges.EVERYONE_CONFIRMS_BUFFER_AVAILABLE_BYTES);
         registerCompressionRateGauge(leaderConfirms, metrics, Gauges.LEADER_CONFIRMS_COMPRESSION_RATE);
         registerCompressionRateGauge(everyoneConfirms, metrics, Gauges.EVERYONE_CONFIRMS_COMPRESSION_RATE);
+        registerFailedBatchesGauge(everyoneConfirms, metrics, Gauges.EVERYONE_CONFIRMS_FAILED_BATCHES_TOTAL);
+        registerFailedBatchesGauge(leaderConfirms, metrics, Gauges.LEADER_CONFIRMS_FAILED_BATCHES_TOTAL);
     }
 
     public void maybeRegisterNodeMetricsGauges(HermesMetrics metrics) {
@@ -72,6 +74,10 @@ public class Producers {
 
     private void registerAvailableBytesGauge(Producer<byte[], byte[]> producer, HermesMetrics metrics, String gauge) {
         registerProducerGauge(producer, metrics, new MetricName("buffer-available-bytes", "producer-metrics", "buffer available bytes", Collections.emptyMap()), gauge);
+    }
+
+    private void registerFailedBatchesGauge(Producer<byte[], byte[]> producer, HermesMetrics metrics, String gauge) {
+        registerProducerGauge(producer, metrics, new MetricName("record-error-total", "producer-metrics", "failed publishing batches", Collections.emptyMap()), gauge);
     }
 
     private void registerProducerGauge(final Producer<byte[], byte[]> producer,
@@ -112,7 +118,7 @@ public class Producers {
         metrics.registerGauge(gauge, () -> {
             Optional<? extends Map.Entry<MetricName, ? extends Metric>> first =
                     producer.metrics().entrySet().stream().filter(predicate).findFirst();
-            double value = first.isPresent() ? first.get().getValue().value() : 0.0;
+            double value = first.map(metricNameEntry -> metricNameEntry.getValue().value()).orElse(0.0);
             return value < 0? 0.0 : value;
         });
     }

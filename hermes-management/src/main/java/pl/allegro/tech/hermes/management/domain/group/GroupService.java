@@ -12,10 +12,12 @@ import pl.allegro.tech.hermes.domain.group.GroupNotExistsException;
 import pl.allegro.tech.hermes.domain.group.GroupRepository;
 import pl.allegro.tech.hermes.infrastructure.MalformedDataException;
 import pl.allegro.tech.hermes.management.domain.Auditor;
+import pl.allegro.tech.hermes.management.domain.auth.RequestUser;
 import pl.allegro.tech.hermes.management.domain.group.commands.CreateGroupRepositoryCommand;
 import pl.allegro.tech.hermes.management.domain.group.commands.RemoveGroupRepositoryCommand;
 import pl.allegro.tech.hermes.management.domain.group.commands.UpdateGroupRepositoryCommand;
 import pl.allegro.tech.hermes.management.domain.dc.MultiDatacenterRepositoryCommandExecutor;
+import pl.allegro.tech.hermes.management.api.auth.CreatorRights;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -28,13 +30,17 @@ public class GroupService {
     private final GroupRepository groupRepository;
     private final Auditor auditor;
     private final MultiDatacenterRepositoryCommandExecutor multiDcExecutor;
+    private final GroupValidator validator;
 
     @Autowired
-    public GroupService(GroupRepository groupRepository, Auditor auditor,
-                        MultiDatacenterRepositoryCommandExecutor multiDcExecutor) {
+    public GroupService(GroupRepository groupRepository,
+                        Auditor auditor,
+                        MultiDatacenterRepositoryCommandExecutor multiDcExecutor,
+                        GroupValidator validator) {
         this.groupRepository = groupRepository;
         this.auditor = auditor;
         this.multiDcExecutor = multiDcExecutor;
+        this.validator = validator;
     }
 
     public List<Group> listGroups() {
@@ -49,14 +55,17 @@ public class GroupService {
         return groupRepository.getGroupDetails(groupName);
     }
 
-    public void createGroup(Group group, String createdBy) {
-        multiDcExecutor.execute(new CreateGroupRepositoryCommand(group));
-        auditor.objectCreated(createdBy, group);
+    public void createGroup(Group group,
+                            RequestUser createdBy,
+                            CreatorRights<Group> creatorRights) {
+        validator.checkCreation(group, creatorRights);
+        multiDcExecutor.executeByUser(new CreateGroupRepositoryCommand(group), createdBy);
+        auditor.objectCreated(createdBy.getUsername(), group);
     }
 
-    public void removeGroup(String groupName, String removedBy) {
-        multiDcExecutor.execute(new RemoveGroupRepositoryCommand(groupName));
-        auditor.objectRemoved(removedBy, Group.class.getSimpleName(), groupName);
+    public void removeGroup(String groupName, RequestUser removedBy) {
+        multiDcExecutor.executeByUser(new RemoveGroupRepositoryCommand(groupName), removedBy);
+        auditor.objectRemoved(removedBy.getUsername(), Group.from(groupName));
     }
 
     public void checkGroupExists(String groupName) {
@@ -65,13 +74,13 @@ public class GroupService {
         }
     }
 
-    public void updateGroup(String groupName, PatchData patch, String modifiedBy) {
+    public void updateGroup(String groupName, PatchData patch, RequestUser modifiedBy) {
         try {
             Group retrieved = groupRepository.getGroupDetails(groupName);
             Group modified = Patch.apply(retrieved, patch);
-            multiDcExecutor.execute(new UpdateGroupRepositoryCommand(modified));
+            multiDcExecutor.executeByUser(new UpdateGroupRepositoryCommand(modified), modifiedBy);
             groupRepository.updateGroup(modified);
-            auditor.objectUpdated(modifiedBy, retrieved, modified);
+            auditor.objectUpdated(modifiedBy.getUsername(), retrieved, modified);
         } catch (MalformedDataException exception) {
             logger.warn("Problem with reading details of group {}.", groupName);
             throw exception;

@@ -11,10 +11,10 @@
                     <input class="form-control" type="password" ng-required="!isAuthorized && authEnabled.headers" id="rootPassword" name="rootPassword" placeholder="root password" ng-model="rootPassword"/>
                 </div>
             </div>
-            <div class="form-group {{topicForm.topicName.$valid ? '' : 'has-error'}}" ng-show="operation === 'ADD'">
+            <div class="form-group {{topicForm.topicName.$valid ? '' : 'has-error'}}" ng-if="operation === 'ADD'">
                 <label for="topicName" class="col-md-3 control-label">Name</label>
                 <div class="col-md-9">
-                    <input class="form-control" id="topicName" required name="topicName" placeholder="name of topic, without group prefix" ng-model="topic.shortName" ng-pattern="/^[a-zA-Z0-9_-]+$/"/>
+                    <input class="form-control" id="topicName" required name="topicName" placeholder="name of topic, without group prefix" ng-model="topic.shortName" ng-pattern="/^[a-zA-Z0-9_]+$/"/>
                 </div>
             </div>
             <div class="form-group {{topicForm.topicDescription.$valid ? '' : 'has-error'}}">
@@ -69,16 +69,25 @@
                 </div>
             </div>
             <hr />
+            <div class="form-group">
+                <label for="retentionUnit" class="col-md-3 control-label">Retention unit</label>
+                <div class="col-md-9">
+                    <select id="retentionUnit" class="form-control" ng-model="topic.retentionTime.retentionUnit">
+                        <option ng-repeat="retentionUnit in config.retentionUnits" value="{{retentionUnit.value}}">{{retentionUnit.label}}</option>
+                    </select>
+                </div>
+            </div>
             <div class="form-group {{topicForm.topicRetention.$valid ? '' : 'has-error'}}">
                 <label for="topicRetention" class="col-md-3 control-label">Retention time</label>
                 <div class="col-md-9">
                     <div class="input-group">
                         <input type="number" min="0" max="7" required class="form-control" id="topicRetention" name="topicRetention" ng-model="topic.retentionTime.duration" placeholder="how long should we keep them for subscribers?"/>
-                        <span class="input-group-addon">days</span>
-                        <span class="input-group-addon helpme-addon" uib-tooltip='For how many days message is available for subscribers after being published.'>?</span>
+                        <span class="input-group-addon" ng-bind="topic.retentionTime.retentionUnit | toLowercase"></span>
+                        <span class="input-group-addon helpme-addon" uib-tooltip='For how many hours/days message is available for subscribers after being published.'>?</span>
                     </div>
                 </div>
             </div>
+            <hr />
             <div class="form-group">
                 <label for="topicAck" class="col-md-3 control-label">Kafka ACK Level</label>
                 <div class="col-md-9">
@@ -96,6 +105,12 @@
                 <div class="col-md-9">
                     <div class="input-group">
                         <input type="checkbox" id="trackingEnabled" name="trackingEnabled" ng-model="topic.trackingEnabled"/>
+                    </div>
+                    <div class="alert alert-warning"
+                         ng-show="topic.trackingEnabled">
+                        <strong>Tracking all messages enabled <span class="glyphicon glyphicon-alert" /></strong>
+                        Please chose this option only when necessary. Mainly this is for debugging problems with topic.
+                        Remember to disable it after the problem is solved.
                     </div>
                 </div>
             </div>
@@ -155,7 +170,7 @@
                     <a href="http://hermes-pubsub.rtfd.org/en/latest/user/publishing-avro/" target="_blank">AVRO schema</a>
                 </label>
                 <div class="col-md-9">
-                    <div class="alert alert-info">
+                    <div class="alert alert-info" ng-hide="config.avroContentTypeMetadataRequired === false">
                         Schema definition <b>must contain</b> an additional field for Hermes internal use:<br>
                         <pre>
 {
@@ -165,15 +180,25 @@
 }
                         </pre>
                     </div>
-                    <textarea class="form-control" id="messageSchema" ng-required="topic.contentType === 'AVRO'"
-                              name="messageSchema" placeholder="Message schema"
-                              ng-model="messageSchema" rows="20"></textarea>
+                    <div class="form-control ace_editor_schema" id="messageSchema" ng-required="topic.contentType === 'AVRO'"
+                         name="message" ng-model="messageSchema"
+                         ui-ace="{
+                            require: ['ace/ext/language_tools'],
+                            advanced: {
+                                enableBasicAutocompletion: true,
+                                enableLiveAutocompletion: true
+                            },
+                            useWrapMode : true,
+                            theme:'chrome',
+                            mode: 'json'}">
+                    </div>
+                    <button class="btn btn-info pull-right margin-top-10" ng-click="beautifyText()">Beautify</button>
                 </div>
             </div>
         </form>
     </div>
     <div class="modal-footer">
-        <button class="btn btn-primary" ng-disabled="topicForm.$invalid" ng-click="save()">Save</button>
+        <button class="btn btn-primary" ng-disabled="topicForm.$invalid || disableSaveButton" ng-click="save()">Save</button>
         <button class="btn btn-warning" ng-click="$dismiss()">Cancel</button>
     </div>
 </section>

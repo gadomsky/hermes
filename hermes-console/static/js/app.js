@@ -11,12 +11,14 @@ var hermes = angular.module('hermes', [
     'hermes.auth',
     'hermes.search',
     'hermes.stats',
-    'hermes.diagnostics',
     'hermes.constraints',
     'hermes.diagnostics',
     'hermes.consistency',
     'hermes.visibility',
-    'hermes.mode'
+    'hermes.mode',
+    'hermes.readiness',
+    'hermes.offlineRetransmission',
+    'ui.ace',
 ]);
 
 hermes.constant('DASHBOARD_CONFIG', config.dashboard);
@@ -26,6 +28,7 @@ hermes.constant('AUTH_OAUTH_CONFIG', config.auth.oauth);
 hermes.constant('METRICS_CONFIG', config.metrics);
 hermes.constant('CONSOLE_CONFIG', config.console);
 hermes.constant('TOPIC_CONFIG', config.topic || {});
+hermes.constant('GROUP_CONFIG', config.group || {});
 hermes.constant('SUBSCRIPTION_CONFIG', config.subscription || {});
 hermes.constant('OWNER_CONFIG', config.owner || {});
 hermes.constant('CONSISTENCY_CONFIG', config.consistency || {});
@@ -76,6 +79,10 @@ hermes.config(['$stateProvider', '$urlRouterProvider', '$httpProvider', '$uibToo
                     url: '/consistency/:groupName/topics/:topicName',
                     templateUrl: 'partials/topicConsistency.html'
                 })
+                .state('datacenterReadiness', {
+                  url: '/readiness',
+                  templateUrl: 'partials/readiness.html'
+                })
                 .state('search', {
                     url: '/search?entity&property&operator&pattern',
                     templateUrl: 'partials/search.html'
@@ -105,6 +112,8 @@ hermes.run(['$rootScope', 'CONSOLE_CONFIG', 'AUTH_CONFIG', "$sce", 'Mode', 'Visi
     function ($rootScope, config, authConfig, $sce, mode, visibility) {
         $rootScope.console = {
             title: config.title,
+            isDangerousEnvironment: config.isDangerousEnvironment,
+            environmentName: config.environmentName,
             footer: $sce.trustAsHtml(config.footer)
         };
         $rootScope.authEnabled = {

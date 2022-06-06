@@ -54,15 +54,12 @@ graphite:
 
 spring:
   jersey:
-    type: servlet
-  mvc:
-    servlet:
-      path: /status
+    type: filter
 
 management:
   endpoints:
     web:
-      base-path: /
+      base-path: /status
   server:
     servlet:
       context-path: /
@@ -81,3 +78,22 @@ subscriptionOwnerCache:
 
 consistencyChecker:
   threadPoolSize: 2
+
+subscription-health:
+  timeoutMillis: 200
+
+audit:
+  isLoggingAuditEnabled: false
+  isEventAuditEnabled: true
+  eventUrl: "http://localhost:19998/audit-events"
+
+group:
+  nonAdminCreationEnabled: true
+  allowedGroupNameRegex: "[a-zA-Z0-9_.-]+"
+
+subscription:
+  subscribersWithAccessToAnyTopic:
+    - ownerSource: 'Plaintext'
+      ownerId: 'subscriberAllowedToAccessAnyTopic'
+      protocols:
+        - http

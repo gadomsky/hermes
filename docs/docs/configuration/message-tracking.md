@@ -1,7 +1,7 @@
 # Message tracking storage
 
 Hermes can store trace of each event pass through system for selected topics and subscriptions. Information stored in
-trace are described in [subscribing guide](/user/subscribing). This section shows how to configure trace storage.
+trace are described in [subscribing guide](../user/subscribing.md). This section shows how to configure trace storage.
 
 Trace data is important, but not critical in Hermes. The number one priority is to keep Hermes core functionality -
 receiving and sending messages - stable. Thus in case of trace storage downtime or malfunction, internal queues might
@@ -31,31 +31,31 @@ in Frontend, Consumers and Management.
 
 ### Frontend configuration
 
-* create `ElasicsearchClientFactory`, which will produce ElasticSearch driver and store it for cleanup
-* set log repository via `HermesFrontend.Builder#withLogRepository`
-* add shutdown hook to cleanup the driver
+* create `ElasticsearchClientFactory`, which will produce ElasticSearch driver and store it for cleanup
+* set log repository via configured spring bean
 
 Example of usage with *example* configuration (there are no `config.get*` methods out of the box!):
 
 ```java
-ElasticsearchClientFactory elasticFactory = new ElasticsearchClientFactory(
-    config.getInt(TRACKER_ELASTICSEARCH_PORT),
-    config.getString(TRACKER_ELASTICSEARCH_CLUSTER_NAME),
-    config.getString(TRACKER_ELASTICSEARCH_HOSTS)
-);
+@Configuration
+public class CustomHermesFrontendConfiguration {
 
-builder.withLogRepository(serviceLocator ->
-    new FrontendElasticsearchLogRepository.Builder(
-            elasticFactory.client(),
-            serviceLocator.getService(PathsCompiler.class),
-            serviceLocator.getService(MetricRegistry.class)
-        )
-        .withClusterName(config.getStringProperty(KAFKA_CLUSTER_NAME))
-        .withQueueSize(config.getInt(TRACKER_ELASTICSEARCH_QUEUE_CAPACITY))
-        .withCommitInterval(config.getInt(TRACKER_ELASTICSEARCH_COMMIT_INTERVAL))
-        .build()
-);
-builder.withShutdownHook(elasticFactory::close);
+    @Bean
+    public LogRepository myFrontendElasticsearchLogRepository(ConfigFactory config) {
+
+        ElasticsearchClientFactory elasticFactory = new ElasticsearchClientFactory(
+                config.getInt(TRACKER_ELASTICSEARCH_PORT),
+                config.getString(TRACKER_ELASTICSEARCH_CLUSTER_NAME),
+                config.getString(TRACKER_ELASTICSEARCH_HOSTS)
+        );
+
+        return new FrontendElasticsearchLogRepository.Builder(
+                elasticFactory.client(),
+                serviceLocator.getService(PathsCompiler.class),
+                serviceLocator.getService(MetricRegistry.class)
+        );
+    }
+}
 ```
 
 ### Consumers configuration

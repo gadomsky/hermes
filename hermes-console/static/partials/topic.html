@@ -8,13 +8,14 @@
     </ol>
 
     <div class="pull-right">
-        <span ng-show="disabled" uib-popover='Sign in to edit the topic' popover-trigger="mouseenter" class="fa helpme">&#xf128;</span>
+        <span ng-show="!userHasSufficientPrivileges" uib-popover='Sign in to edit the topic' popover-trigger="mouseenter" class="fa helpme">&#xf128;</span>
         <span bind-html="config.buttonsExtension"></span>
-        <button class="btn btn-primary" ng-disabled="disabled || config.readOnlyModeEnabled" ng-click="edit()">Edit</button>
-        <button class="btn btn-primary" ng-disabled="disabled" ng-click="clone()">Clone</button>
-        <button class="btn btn-warning" ng-disabled="disabled" ng-show="admin && !isBlacklisted" ng-click="blacklist()" >Blacklist</button>
-        <button class="btn btn-default" ng-disabled="disabled" ng-show="admin && isBlacklisted"ng-click="unblacklist()" >Unblacklist</button>
-        <button class="btn btn-danger" ng-disabled="disabled" ng-click="remove()">Remove</button>
+        <button class="btn btn-primary" ng-disabled="userWithoutAccess || config.readOnlyModeEnabled" ng-click="edit()">Edit</button>
+        <button class="btn btn-primary" ng-disabled="userWithoutAccess" ng-click="clone()">Clone</button>
+        <button class="btn btn-primary" ng-disabled="userWithoutAccess" ng-show="offlineRetransmissionEnabled" ng-click="retransmitOffline()">Offline retransmission</button>
+        <button class="btn btn-warning" ng-disabled="userWithoutAccess" ng-show="admin && !isBlacklisted" ng-click="blacklist()" >Blacklist</button>
+        <button class="btn btn-default" ng-disabled="userWithoutAccess" ng-show="admin && isBlacklisted"ng-click="unblacklist()" >Unblacklist</button>
+        <button class="btn btn-danger" ng-disabled="userWithoutAccess" ng-click="remove()">Remove</button>
     </div>
 
     <h1><small>Topic:</small> {{topic.name}}</h1>
@@ -78,8 +79,8 @@
                         <span uib-popover='Specifies the strength of guarantees that acknowledged message was indeed persisted. In "Leader" mode ACK is required only from topic leader, which is fast and gives 99.99999% guarantee. It might be not enough when cluster is unstable. "All" mode means message needs to be saved on all replicas before sending ACK, which is quite slow but gives 100% guarantee that message has been persisted.' popover-trigger="mouseenter" class="fa helpme pull-right">&#xf128;</span>
                     </p>
                     <p>
-                        <strong>Retention time:</strong> {{topic.retentionTime.duration}} days
-                        <span uib-popover='For how many days message is available for subscribers after being published.' popover-trigger="mouseenter" class="fa helpme pull-right">&#xf128;</span>
+                        <strong>Retention time:</strong> {{topic.retentionTime.duration}} {{topic.retentionTime.retentionUnit | toLowercase}}
+                        <span uib-popover='For how many hours/days message is available for subscribers after being published.' popover-trigger="mouseenter" class="fa helpme pull-right">&#xf128;</span>
                     </p>
                     <p><strong>Tracking enabled:</strong> {{topic.trackingEnabled}}</p>
                     <p><strong>Max message size:</strong> {{topic.maxMessageSize | readableSize}}</p>
@@ -133,11 +134,18 @@
             <div class="panel panel-default" style="position: relative">
                 <span class="btn pull-right glyphicon {{showMessageSchema ? 'glyphicon-chevron-up' : 'glyphicon-chevron-down' }}" ng-click="showMessageSchema = !showMessageSchema"></span>
                 <button class="btn btn-default pull-right" style="padding: 4px; margin-top: 4px" ng-click="copyToClipboard()">Copy to clipboard</button>
+                <div class="pull-right" style="padding: 4px; margin-top: 4px; margin-right: 0.6em !important;">
+                    <label>
+                        <input type="checkbox" style="vertical-align: top" ng-model="showRawMessageSchema">
+                        Raw
+                    </label>
+                </div>
                 <div class="panel-heading" ng-click="showMessageSchema = !showMessageSchema">
                     <h3 class="panel-title">Message schema</h3>
                 </div>
                 <div class="panel-body" uib-collapse="!showMessageSchema">
-                    <pre class="pre-scrollable">{{ messageSchema }}</pre>
+                    <pre class="pre-scrollable" ng-show="showRawMessageSchema">{{ messageSchema }}</pre>
+                    <avro-viewer schema="messageSchema" ng-show="!showRawMessageSchema"></avro-viewer>
                 </div>
             </div>
         </div>
@@ -164,8 +172,9 @@
         <div class="list-group">
             <div class="list-group-item">
                 <div class="pull-right">
-                    <span ng-show="disabled" uib-popover='Sign in to add a subscription' popover-trigger="mouseenter" class="fa helpme">&#xf128;</span>
-                    <button class="btn btn-primary" ng-disabled="topic.subscribingRestricted && disabled" ng-click="addSubscription()"><span class="glyphicon glyphicon-plus"></span></button>
+                    <button class="btn btn-primary" ng-click="copyClientsToClipboard()">Copy clients to clipboard</button>
+                    <span ng-show="!userHasSufficientPrivileges" uib-popover='Sign in to add a subscription' popover-trigger="mouseenter" class="fa helpme">&#xf128;</span>
+                    <button class="btn btn-primary" ng-disabled="(topic.subscribingRestricted && !userHasSufficientPrivileges) || readOnly" ng-click="addSubscription()"><span class="glyphicon glyphicon-plus"></span></button>
                 </div>
                 <h4>
                     Subscriptions
@@ -193,28 +202,9 @@
                     Offline clients
                 </h4>
             </div>
-            <table class="table table-bordered">
-                <thead>
-                    <tr>
-                        <th></th>
-                        <th>User</th>
-                        <th>Last access date</th>
-                        <th>Owners</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr ng-repeat="client in clients">
-                        <td>{{$index + 1}}</td>
-                        <td>{{client.user}}</td>
-                        <td>{{client.lastAccess}}</td>
-                        <td>{{client.owners.join(", ")}}</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-
-        <div ng-show="offlineClientsFetching" class="text-center">
-            <h1><i class="fa fa-circle-o-notch fa-spin"></i></h1>
+            <div class="list-group-item">
+                <iframe height="400" ng-src="{{trustSrc(iframeSource)}}" style="border: none;" width="100%"></iframe>
+            </div>
         </div>
     </div>
 

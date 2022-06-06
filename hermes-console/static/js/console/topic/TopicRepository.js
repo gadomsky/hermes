@@ -8,6 +8,7 @@ repository.factory('TopicRepository', ['DiscoveryService', '$resource', '$locati
         var blacklistRepository = $resource(discovery.resolve('/blacklist/topics/:name'), null,
             { blacklist: { method: 'POST', url: discovery.resolve('/blacklist/topics') } });
         var listing = $resource(discovery.resolve('/topics'));
+        var topicUsersRepository = $resource(discovery.resolve('/topics/:name/clients'));
 
         return {
             list: listing.query,
@@ -47,17 +48,20 @@ repository.factory('TopicRepository', ['DiscoveryService', '$resource', '$locati
             },
             unblacklist: function (topicName) {
                 return blacklistRepository.delete({name: topicName});
+            },
+            getTopicUsers: function (topicName) {
+                return topicUsersRepository.query({name: topicName}).$promise;
             }
         };
     }]);
 
 repository.factory('OfflineClientsRepository', ['DiscoveryService', '$resource',
     function (discovery, $resource) {
-        var repository = $resource(discovery.resolve('/topics/:topic/offline-clients'));
+        var repository = $resource(discovery.resolve('/topics/:topic/offline-clients-source'));
 
         return {
-            get: function (topic) {
-                return repository.query({topic: topic}).$promise;
+            getIframeSource: function (topic) {
+                return repository.get({topic: topic}).$promise;
             }
         };
     }]);

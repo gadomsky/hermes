@@ -8,6 +8,7 @@ import pl.allegro.tech.hermes.api.helpers.Patch;
 import pl.allegro.tech.hermes.domain.oauth.OAuthProviderRepository;
 import pl.allegro.tech.hermes.management.api.validator.ApiPreconditions;
 import pl.allegro.tech.hermes.management.domain.Auditor;
+import pl.allegro.tech.hermes.management.domain.auth.RequestUser;
 import pl.allegro.tech.hermes.management.domain.dc.MultiDatacenterRepositoryCommandExecutor;
 import pl.allegro.tech.hermes.management.domain.oauth.commands.CreateOAuthProviderRepositoryCommand;
 import pl.allegro.tech.hermes.management.domain.oauth.commands.RemoveOAuthProviderRepositoryCommand;
@@ -40,23 +41,24 @@ public class OAuthProviderService {
         return repository.getOAuthProviderDetails(oAuthProviderName).anonymize();
     }
 
-    public void createOAuthProvider(OAuthProvider oAuthProvider, String createdBy) {
-        preconditions.checkConstraints(oAuthProvider);
-        multiDcExecutor.execute(new CreateOAuthProviderRepositoryCommand(oAuthProvider));
-        auditor.objectCreated(createdBy, oAuthProvider);
+    public void createOAuthProvider(OAuthProvider oAuthProvider, RequestUser createdBy) {
+        preconditions.checkConstraints(oAuthProvider, false);
+        multiDcExecutor.executeByUser(new CreateOAuthProviderRepositoryCommand(oAuthProvider), createdBy);
+        auditor.objectCreated(createdBy.getUsername(), oAuthProvider);
     }
 
-    public void removeOAuthProvider(String oAuthProviderName, String removedBy) {
-        multiDcExecutor.execute(new RemoveOAuthProviderRepositoryCommand(oAuthProviderName));
-        auditor.objectRemoved(removedBy, OAuthProvider.class.getSimpleName(), oAuthProviderName);
+    public void removeOAuthProvider(String oAuthProviderName, RequestUser removedBy) {
+        OAuthProvider oAuthProvider = repository.getOAuthProviderDetails(oAuthProviderName);
+        multiDcExecutor.executeByUser(new RemoveOAuthProviderRepositoryCommand(oAuthProviderName), removedBy);
+        auditor.objectRemoved(removedBy.getUsername(), oAuthProvider);
     }
 
-    public void updateOAuthProvider(String oAuthProviderName, PatchData patch, String updatedBy) {
+    public void updateOAuthProvider(String oAuthProviderName, PatchData patch, RequestUser updatedBy) {
         OAuthProvider retrieved = repository.getOAuthProviderDetails(oAuthProviderName);
         OAuthProvider updated = Patch.apply(retrieved, patch);
-        preconditions.checkConstraints(updated);
+        preconditions.checkConstraints(updated, false);
 
-        multiDcExecutor.execute(new UpdateOAuthProviderRepositoryCommand(updated));
-        auditor.objectUpdated(updatedBy, retrieved, updated);
+        multiDcExecutor.executeByUser(new UpdateOAuthProviderRepositoryCommand(updated), updatedBy);
+        auditor.objectUpdated(updatedBy.getUsername(), retrieved, updated);
     }
 }
