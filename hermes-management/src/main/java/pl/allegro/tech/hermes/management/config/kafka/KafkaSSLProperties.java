@@ -4,15 +4,26 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "ssl")
 public class KafkaSSLProperties {
     private boolean isEnabled = false;
-    private String mechanism = "SSL";
-    private String trustStoreLocation = "kafka.server.truststore.jks";
-    private String trustStorePassword = "changeit";
-    private String keyStoreLocation = "kafka.server.keystore.jks";
-    private String keyStorePassword = "changeit";
-    private String keyPassword = "changeit";
+    private String trustStoreLocation = null;
+    private String trustStorePassword = null;
+    private String keyStoreLocation = null;
+    private String keyStorePassword = null;
+    private String keyPassword = null;
     private String protocolVersion = "TLSv1.2";
-    private String securityProtocol = "SSL";
-    private String endpointIdentificationAlgorithm = "";
+    private String endpointIdentificationAlgorithm = "https";
+    private String keyStoreCertificateChain = null;
+    private String keyStoreKey = null;
+    private String trustStoreCertificates = null;
+    private String enabledProtocols = null;
+    private String keyStoreType = "JKS";
+    private String protocol = null;
+    private String provider = null;
+    private String trustStoreType = "JKS";
+    private String cipherSuites = null;
+    private String engineFactoryClass = null;
+    private String keymanagerAlgorithm = "SunX509";
+    private String secureRandomImplementation = null;
+    private String trustmanagerAlgorithm = "PKIX";
 
     public boolean isEnabled() {
         return isEnabled;
@@ -21,15 +32,6 @@ public class KafkaSSLProperties {
     public void setEnabled(boolean enabled) {
         isEnabled = enabled;
     }
-
-    public String getMechanism() {
-        return mechanism;
-    }
-
-    public void setMechanism(String mechanism) {
-        this.mechanism = mechanism;
-    }
-
     public String getTrustStoreLocation() {
         return trustStoreLocation;
     }
@@ -77,13 +79,6 @@ public class KafkaSSLProperties {
     public void setProtocolVersion(String protocolVersion) {
         this.protocolVersion = protocolVersion;
     }
-    public String getSecurityProtocol() {
-        return securityProtocol;
-    }
-
-    public void setSecurityProtocol(String securityProtocol) {
-        this.securityProtocol = securityProtocol;
-    }
 
     public String getEndpointIdentificationAlgorithm() {
         return endpointIdentificationAlgorithm;
@@ -92,4 +87,109 @@ public class KafkaSSLProperties {
     public void setEndpointIdentificationAlgorithm(String endpointIdentificationAlgorithm) {
         this.endpointIdentificationAlgorithm = endpointIdentificationAlgorithm;
     }
+
+    public String getKeyStoreCertificateChain() {
+        return keyStoreCertificateChain;
+    }
+
+    public void setKeyStoreCertificateChain(String keyStoreCertificateChain) {
+        this.keyStoreCertificateChain = keyStoreCertificateChain;
+    }
+
+    public String getKeyStoreKey() {
+        return keyStoreKey;
+    }
+
+    public void setKeyStoreKey(String keyStoreKey) {
+        this.keyStoreKey = keyStoreKey;
+    }
+
+    public String getTrustStoreCertificates() {
+        return trustStoreCertificates;
+    }
+
+    public void setTrustStoreCertificates(String trustStoreCertificates) {
+        this.trustStoreCertificates = trustStoreCertificates;
+    }
+
+    public String getEnabledProtocols() {
+        return enabledProtocols;
+    }
+
+    public void setEnabledProtocols(String enabledProtocols) {
+        this.enabledProtocols = enabledProtocols;
+    }
+
+    public String getKeyStoreType() {
+        return keyStoreType;
+    }
+
+    public void setKeyStoreType(String keyStoreType) {
+        this.keyStoreType = keyStoreType;
+    }
+
+    public String getProtocol() {
+        return protocol;
+    }
+
+    public void setProtocol(String protocol) {
+        this.protocol = protocol;
+    }
+
+    public String getProvider() {
+        return provider;
+    }
+
+    public void setProvider(String provider) {
+        this.provider = provider;
+    }
+
+    public String getTrustStoreType() {
+        return trustStoreType;
+    }
+
+    public void setTrustStoreType(String trustStoreType) {
+        this.trustStoreType = trustStoreType;
+    }
+
+    public String getCipherSuites() {
+        return cipherSuites;
+    }
+
+    public void setCipherSuites(String cipherSuites) {
+        this.cipherSuites = cipherSuites;
+    }
+
+    public String getEngineFactoryClass() {
+        return engineFactoryClass;
+    }
+
+    public void setEngineFactoryClass(String engineFactoryClass) {
+        this.engineFactoryClass = engineFactoryClass;
+    }
+
+    public String getKeymanagerAlgorithm() {
+        return keymanagerAlgorithm;
+    }
+
+    public void setKeymanagerAlgorithm(String keymanagerAlgorithm) {
+        this.keymanagerAlgorithm = keymanagerAlgorithm;
+    }
+
+    public String getSecureRandomImplementation() {
+        return secureRandomImplementation;
+    }
+
+    public void setSecureRandomImplementation(String secureRandomImplementation) {
+        this.secureRandomImplementation = secureRandomImplementation;
+    }
+
+    public String getTrustmanagerAlgorithm() {
+        return trustmanagerAlgorithm;
+    }
+
+    public void setTrustmanagerAlgorithm(String trustmanagerAlgorithm) {
+        this.trustmanagerAlgorithm = trustmanagerAlgorithm;
+    }
+
 }

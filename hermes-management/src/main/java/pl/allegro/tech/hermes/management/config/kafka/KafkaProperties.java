@@ -32,6 +32,8 @@ public class KafkaProperties {
 
     private KafkaSSLProperties ssl = new KafkaSSLProperties();
 
+    private String securityProtocol = "PLAINTEXT";
+
     public static final class KafkaConsumer {
 
         private int cacheExpirationSeconds = 60;
@@ -225,5 +227,13 @@ public class KafkaProperties {
 
     public void setKafkaServerRequestTimeoutMillis(int kafkaServerRequestTimeoutMillis) {
         this.kafkaServerRequestTimeoutMillis = kafkaServerRequestTimeoutMillis;
+    }
+
+    public String getSecurityProtocol() {
+        return securityProtocol;
+    }
+
+    public void setSecurityProtocol(String securityProtocol) {
+        this.securityProtocol = securityProtocol;
     }
 }

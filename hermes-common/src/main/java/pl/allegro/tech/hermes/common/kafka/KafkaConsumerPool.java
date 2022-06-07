@@ -11,6 +11,8 @@ import org.apache.kafka.common.TopicPartition;
 import pl.allegro.tech.hermes.common.broker.BrokerStorage;
 import pl.allegro.tech.hermes.common.exception.BrokerNotFoundForPartitionException;
 
+import java.util.Arrays;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -24,13 +26,25 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.RECEIVE_BUFFER_CONFIG;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_JAAS_CONFIG;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_MECHANISM;
-import static org.apache.kafka.common.config.SslConfigs.SSL_PROTOCOL_CONFIG;
-import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG;
-import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG;
+import static org.apache.kafka.common.config.SslConfigs.SSL_CIPHER_SUITES_CONFIG;
+import static org.apache.kafka.common.config.SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG;
+import static org.apache.kafka.common.config.SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG;
+import static org.apache.kafka.common.config.SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG;
+import static org.apache.kafka.common.config.SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG;
+import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG;
+import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_KEY_CONFIG;
 import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG;
 import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG;
+import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_TYPE_CONFIG;
 import static org.apache.kafka.common.config.SslConfigs.SSL_KEY_PASSWORD_CONFIG;
-import static org.apache.kafka.common.config.SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG;
+import static org.apache.kafka.common.config.SslConfigs.SSL_PROTOCOL_CONFIG;
+import static org.apache.kafka.common.config.SslConfigs.SSL_PROVIDER_CONFIG;
+import static org.apache.kafka.common.config.SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG;
+import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG;
+import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG;
+import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG;
+import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG;
+import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG;
 
 /**
  * This class help us to avoid unnecessarily creating new kafka consumers for the same broker instance, mainly in case of
@@ -98,21 +112,33 @@ public class KafkaConsumerPool {
             props.put("key.deserializer", "org.apache.kafka.common.serialization.ByteArrayDeserializer");
             props.put("value.deserializer", "org.apache.kafka.common.serialization.ByteArrayDeserializer");
 
+            props.put(SECURITY_PROTOCOL_CONFIG, poolConfig.getSecurityProtocol());
+
             if (poolConfig.isSaslEnabled()) {
                 props.put(SASL_MECHANISM, poolConfig.getSecurityMechanism());
-                props.put(SECURITY_PROTOCOL_CONFIG, poolConfig.getSecurityProtocol());
                 props.put(SASL_JAAS_CONFIG, poolConfig.getSaslJaasConfig());
             }
 
             if (poolConfig.isSslEnabled()) {
-                props.put(SSL_TRUSTSTORE_LOCATION_CONFIG, poolConfig.getSslTrustStoreLocation());
-                props.put(SSL_TRUSTSTORE_PASSWORD_CONFIG, poolConfig.getSslTrustStorePassword());
+                props.put(SSL_KEY_PASSWORD_CONFIG, poolConfig.getSslKeyPassword());
+                props.put(SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG, poolConfig.getSslKeyStoreCertificateChain());
+                props.put(SSL_KEYSTORE_KEY_CONFIG, poolConfig.getSslKeyStoreKey());
                 props.put(SSL_KEYSTORE_LOCATION_CONFIG, poolConfig.getSslKeyStoreLocation());
                 props.put(SSL_KEYSTORE_PASSWORD_CONFIG, poolConfig.getSslKeyStorePassword());
-                props.put(SSL_KEY_PASSWORD_CONFIG, poolConfig.getSslKeyPassword());
+                props.put(SSL_TRUSTSTORE_CERTIFICATES_CONFIG, poolConfig.getSslTrustStoreCertificates());
+                props.put(SSL_TRUSTSTORE_LOCATION_CONFIG, poolConfig.getSslTrustStoreLocation());
+                props.put(SSL_TRUSTSTORE_PASSWORD_CONFIG, poolConfig.getSslTrustStorePassword());
+                props.put(SSL_ENABLED_PROTOCOLS_CONFIG, Optional.of(poolConfig.getSslEnabledProtocols()).map(s -> Arrays.asList(s.split(","))).orElse(null));
+                props.put(SSL_KEYSTORE_TYPE_CONFIG, poolConfig.getSslKeyStoreType());
                 props.put(SSL_PROTOCOL_CONFIG, poolConfig.getSslProtocolVersion());
-                props.put(SECURITY_PROTOCOL_CONFIG, poolConfig.getSslSecurityProtocol());
+                props.put(SSL_PROVIDER_CONFIG, poolConfig.getSslProvider());
+                props.put(SSL_TRUSTSTORE_TYPE_CONFIG, poolConfig.getSslTrustStoreType());
+                props.put(SSL_CIPHER_SUITES_CONFIG, Optional.of(poolConfig.getSslCipherSuites()).map(s -> Arrays.asList(s.split(","))).orElse(null));
                 props.put(SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, poolConfig.getSslEndpointIdentificationAlgorithm());
+                props.put(SSL_ENGINE_FACTORY_CLASS_CONFIG, poolConfig.getSslEngineFactoryClass());
+                props.put(SSL_KEYMANAGER_ALGORITHM_CONFIG, poolConfig.getSslKeymanagerAlgorithm());
+                props.put(SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG, poolConfig.getSslSecureRandomImplementation());
+                props.put(SSL_TRUSTMANAGER_ALGORITHM_CONFIG, poolConfig.getSslTrustmanagerAlgorithm());
             }
 
             return new KafkaConsumer<>(props);

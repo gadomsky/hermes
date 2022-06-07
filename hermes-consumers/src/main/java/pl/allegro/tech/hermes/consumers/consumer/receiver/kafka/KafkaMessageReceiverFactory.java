@@ -20,6 +20,8 @@ import pl.allegro.tech.hermes.consumers.consumer.receiver.ThrottlingMessageRecei
 import pl.allegro.tech.hermes.domain.filtering.chain.FilterChainFactory;
 import pl.allegro.tech.hermes.tracker.consumers.Trackers;
 
+import java.util.Arrays;
+import java.util.Optional;
 import java.util.Properties;
 
 import static org.apache.kafka.clients.CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
@@ -47,27 +49,14 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.SEND_BUFFER_CONFI
 import static org.apache.kafka.clients.consumer.ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_JAAS_CONFIG;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_MECHANISM;
-import static pl.allegro.tech.hermes.common.config.Configs.CONSUMER_RECEIVER_INITIAL_IDLE_TIME;
-import static pl.allegro.tech.hermes.common.config.Configs.CONSUMER_RECEIVER_MAX_IDLE_TIME;
-import static pl.allegro.tech.hermes.common.config.Configs.KAFKA_AUTHORIZATION_ENABLED;
-import static pl.allegro.tech.hermes.common.config.Configs.KAFKA_AUTHORIZATION_MECHANISM;
-import static pl.allegro.tech.hermes.common.config.Configs.KAFKA_AUTHORIZATION_PASSWORD;
-import static pl.allegro.tech.hermes.common.config.Configs.KAFKA_AUTHORIZATION_PROTOCOL;
-import static pl.allegro.tech.hermes.common.config.Configs.KAFKA_AUTHORIZATION_USERNAME;
-import static pl.allegro.tech.hermes.common.config.Configs.KAFKA_SSL_TRUSTSTORE_LOCATION;
-import static pl.allegro.tech.hermes.common.config.Configs.KAFKA_SSL_TRUSTSTORE_PASSWORD;
-import static pl.allegro.tech.hermes.common.config.Configs.KAFKA_SSL_KEYSTORE_LOCATION;
-import static pl.allegro.tech.hermes.common.config.Configs.KAFKA_SSL_KEYSTORE_PASSWORD;
-import static pl.allegro.tech.hermes.common.config.Configs.KAFKA_SSL_KEY_PASSWORD;
-import static pl.allegro.tech.hermes.common.config.Configs.KAFKA_SSL_PROTOCOL_VERSION;
-import static pl.allegro.tech.hermes.common.config.Configs.KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM;
 import static org.apache.kafka.common.config.SslConfigs.SSL_PROTOCOL_CONFIG;
 import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG;
 import static org.apache.kafka.common.config.SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG;
 import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG;
 import static org.apache.kafka.common.config.SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG;
 import static org.apache.kafka.common.config.SslConfigs.SSL_KEY_PASSWORD_CONFIG;
-import static org.apache.kafka.common.config.SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG;
+import static org.apache.kafka.common.config.SslConfigs.*;
+import static pl.allegro.tech.hermes.common.config.Configs.*;
 
 public class KafkaMessageReceiverFactory implements ReceiverFactory {
 
@@ -145,10 +134,10 @@ public class KafkaMessageReceiverFactory implements ReceiverFactory {
         props.put("key.deserializer", "org.apache.kafka.common.serialization.ByteArrayDeserializer");
         props.put("value.deserializer", "org.apache.kafka.common.serialization.ByteArrayDeserializer");
 
-        if (configs.getBooleanProperty(KAFKA_AUTHORIZATION_ENABLED) &&
-                configs.getStringProperty(KAFKA_AUTHORIZATION_MECHANISM).equalsIgnoreCase("PLAIN")) {
+        props.put(SECURITY_PROTOCOL_CONFIG, configs.getStringProperty(KAFKA_SECURITY_PROTOCOL));
+
+        if(configs.getBooleanProperty(KAFKA_AUTHORIZATION_ENABLED)){
             props.put(SASL_MECHANISM, configs.getStringProperty(KAFKA_AUTHORIZATION_MECHANISM));
-            props.put(SECURITY_PROTOCOL_CONFIG, configs.getStringProperty(KAFKA_AUTHORIZATION_PROTOCOL));
             props.put(SASL_JAAS_CONFIG,
                     "org.apache.kafka.common.security.plain.PlainLoginModule required\n"
                             + "username=\"" + configs.getStringProperty(KAFKA_AUTHORIZATION_USERNAME) + "\"\n"
@@ -156,19 +145,28 @@ public class KafkaMessageReceiverFactory implements ReceiverFactory {
             );
         }
 
-        if (configs.getBooleanProperty(KAFKA_AUTHORIZATION_ENABLED) &&
-                configs.getStringProperty(KAFKA_AUTHORIZATION_MECHANISM).equalsIgnoreCase("SSL")) {
-            props.put(SSL_TRUSTSTORE_LOCATION_CONFIG, configs.getStringProperty(KAFKA_SSL_TRUSTSTORE_LOCATION));
-            props.put(SSL_TRUSTSTORE_PASSWORD_CONFIG, configs.getStringProperty(KAFKA_SSL_TRUSTSTORE_PASSWORD));
+        if(configs.getBooleanProperty(KAFKA_SSL_ENABLED)){
+            props.put(SSL_KEY_PASSWORD_CONFIG, configs.getStringProperty(KAFKA_SSL_KEY_PASSWORD));
+            props.put(SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG, configs.getStringProperty(KAFKA_SSL_KEYSTORE_CERTIFICATE_CHAIN));
+            props.put(SSL_KEYSTORE_KEY_CONFIG, configs.getStringProperty(KAFKA_SSL_KEYSTORE_KEY));
             props.put(SSL_KEYSTORE_LOCATION_CONFIG, configs.getStringProperty(KAFKA_SSL_KEYSTORE_LOCATION));
             props.put(SSL_KEYSTORE_PASSWORD_CONFIG, configs.getStringProperty(KAFKA_SSL_KEYSTORE_PASSWORD));
-            props.put(SSL_KEY_PASSWORD_CONFIG, configs.getStringProperty(KAFKA_SSL_KEY_PASSWORD));
-            props.put(SSL_PROTOCOL_CONFIG, configs.getStringProperty(KAFKA_SSL_PROTOCOL_VERSION));
-            props.put(SECURITY_PROTOCOL_CONFIG, configs.getStringProperty(KAFKA_AUTHORIZATION_MECHANISM));
+            props.put(SSL_TRUSTSTORE_CERTIFICATES_CONFIG, configs.getStringProperty(KAFKA_SSL_TRUSTSTORE_CERTIFICATES));
+            props.put(SSL_TRUSTSTORE_LOCATION_CONFIG, configs.getStringProperty(KAFKA_SSL_TRUSTSTORE_LOCATION));
+            props.put(SSL_TRUSTSTORE_PASSWORD_CONFIG, configs.getStringProperty(KAFKA_SSL_TRUSTSTORE_PASSWORD));
+            props.put(SSL_ENABLED_PROTOCOLS_CONFIG, Optional.of(configs.getStringProperty(KAFKA_SSL_ENABLED_PROTOCOLS)).map(s -> Arrays.asList(s.split(","))).orElse(null));
+            props.put(SSL_KEYSTORE_TYPE_CONFIG, configs.getStringProperty(KAFKA_SSL_KEYSTORE_TYPE));
+            props.put(SSL_PROTOCOL_CONFIG, configs.getStringProperty(KAFKA_SSL_PROTOCOL));
+            props.put(SSL_PROVIDER_CONFIG, configs.getStringProperty(KAFKA_SSL_PROVIDER));
+            props.put(SSL_TRUSTSTORE_TYPE_CONFIG, configs.getStringProperty(KAFKA_SSL_TRUSTSTORE_TYPE));
+            props.put(SSL_CIPHER_SUITES_CONFIG, Optional.of(configs.getStringProperty(KAFKA_SSL_CIPHER_SUITES)).map(s -> Arrays.asList(s.split(","))).orElse(null));
             props.put(SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, configs.getStringProperty(KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM));
+            props.put(SSL_ENGINE_FACTORY_CLASS_CONFIG, configs.getStringProperty(KAFKA_SSL_ENGINE_FACTORY_CLASS));
+            props.put(SSL_KEYMANAGER_ALGORITHM_CONFIG, configs.getStringProperty(KAFKA_SSL_KEYMANAGER_ALGORITHM));
+            props.put(SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG, configs.getStringProperty(KAFKA_SSL_SECURE_RANDOM_IMPLEMENTATION));
+            props.put(SSL_TRUSTMANAGER_ALGORITHM_CONFIG, configs.getStringProperty(KAFKA_SSL_TRUSTMANAGER_ALGORITHM));
         }
-        
-        
+
         props.put(AUTO_OFFSET_RESET_CONFIG, configs.getStringProperty(Configs.KAFKA_CONSUMER_AUTO_OFFSET_RESET_CONFIG));
         props.put(SESSION_TIMEOUT_MS_CONFIG, configs.getIntProperty(Configs.KAFKA_CONSUMER_SESSION_TIMEOUT_MS_CONFIG));
         props.put(HEARTBEAT_INTERVAL_MS_CONFIG, configs.getIntProperty(Configs.KAFKA_CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG));

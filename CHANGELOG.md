@@ -11,6 +11,11 @@ After deploying a Hermes version that includes this change, you can manually rem
 * `{zookeeper.root}/consumers-workload/{kafka.cluster.name}/runtime`
 * `{zookeeper.root}/consumers-rate/{kafka.cluster.name}/runtime`
 
+#### ([xxx](https://github.com/allegro/hermes/pull/xxx)) Add support for SSL in kafka connection
+* Config param `kafka.authorization.protocol` has become `kafka.security.protocol` with default value `"PLAINTEXT"`
+* Config params `kafka.ssl.*` have been introduced:
+  * todo
+
 ## 1.13.0 (24.05.2022)
 
 ### Enhancements
