@@ -5,6 +5,7 @@ import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
 import org.apache.avro.Schema;
 import org.glassfish.jersey.client.ClientConfig;
 import org.glassfish.jersey.client.ClientProperties;
+import org.glassfish.jersey.client.authentication.HttpAuthenticationFeature;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import pl.allegro.tech.hermes.common.config.ConfigFactory;
@@ -24,6 +25,9 @@ import pl.allegro.tech.hermes.schema.resolver.SchemaRepositoryInstanceResolver;
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 
+import static pl.allegro.tech.hermes.common.config.Configs.SCHEMA_REPOSITORY_AUTHORIZATION_ENABLED;
+import static pl.allegro.tech.hermes.common.config.Configs.SCHEMA_REPOSITORY_AUTHORIZATION_PASSWORD;
+import static pl.allegro.tech.hermes.common.config.Configs.SCHEMA_REPOSITORY_AUTHORIZATION_USERNAME;
 import static pl.allegro.tech.hermes.common.config.Configs.SCHEMA_REPOSITORY_HTTP_CONNECT_TIMEOUT_MS;
 import static pl.allegro.tech.hermes.common.config.Configs.SCHEMA_REPOSITORY_HTTP_READ_TIMEOUT_MS;
 
@@ -63,6 +67,14 @@ public class SchemaConfiguration {
                 .property(ClientProperties.CONNECT_TIMEOUT, configFactory.getIntProperty(SCHEMA_REPOSITORY_HTTP_CONNECT_TIMEOUT_MS))
                 .register(new JacksonJsonProvider(mapper));
 
+        if (configFactory.getBooleanProperty(SCHEMA_REPOSITORY_AUTHORIZATION_ENABLED)) {
+            HttpAuthenticationFeature auth = HttpAuthenticationFeature.basic(
+                    configFactory.getStringProperty(SCHEMA_REPOSITORY_AUTHORIZATION_USERNAME),
+                    configFactory.getStringProperty(SCHEMA_REPOSITORY_AUTHORIZATION_PASSWORD)
+            );
+            config.register(auth);
+        }
+        
         return ClientBuilder.newClient(config);
     }
 

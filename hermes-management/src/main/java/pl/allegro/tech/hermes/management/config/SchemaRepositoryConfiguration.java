@@ -5,10 +5,10 @@ import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
 import org.apache.avro.Schema;
 import org.glassfish.jersey.client.ClientConfig;
 import org.glassfish.jersey.client.ClientProperties;
+import org.glassfish.jersey.client.authentication.HttpAuthenticationFeature;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -50,7 +50,10 @@ public class SchemaRepositoryConfiguration {
                 .property(ClientProperties.CONNECT_TIMEOUT, schemaRepositoryProperties.getConnectionTimeoutMillis())
                 .property(ClientProperties.READ_TIMEOUT, schemaRepositoryProperties.getSocketTimeoutMillis())
                 .register(new JacksonJsonProvider(mapper));
-
+        if (schemaRepositoryProperties.getAuthorization().isEnabled()) {
+            HttpAuthenticationFeature auth = HttpAuthenticationFeature.basic(schemaRepositoryProperties.getAuthorization().getUsername(), schemaRepositoryProperties.getAuthorization().getPassword());
+            config.register(auth);
+        }
         return ClientBuilder.newClient(config);
     }
 

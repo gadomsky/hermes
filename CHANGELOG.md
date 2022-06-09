@@ -11,6 +11,14 @@ After deploying a Hermes version that includes this change, you can manually rem
 * `{zookeeper.root}/consumers-workload/{kafka.cluster.name}/runtime`
 * `{zookeeper.root}/consumers-rate/{kafka.cluster.name}/runtime`
 
+#### ([xxx](https://github.com/allegro/hermes/pull/xxx)) Introduce schema registry basic auth configuration
+
+Following properties has been introduced:
+
+* `schema.repository.authorization.enabled` - by default `false`
+* `schema.repository.authorization.username`
+* `schema.repository.authorization.password`
+
 ## 1.13.0 (24.05.2022)
 
 ### Enhancements
